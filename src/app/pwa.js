@@ -14,8 +14,10 @@ export function registerSW() {
   // 개발 중(localhost)에는 고친 파일이 바로 보이도록 켜지 않는다 (hoedok.sw=1이면 켬)
   if (isLocal && !forced) return;
   let refreshing = false;
+  // 처음 설치될 때는 새로 고치지 않는다 (이미 최신 파일로 떠 있으므로). 새 버전으로 바뀔 때만.
+  const hadController = !!navigator.serviceWorker.controller;
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing) return;
+    if (refreshing || !hadController) return;
     refreshing = true;
     location.reload();
   });
