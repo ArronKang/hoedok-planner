@@ -1,10 +1,13 @@
 """앱 아이콘 만들기: 진도 칸(단계마다 한 칸, 채워진 만큼 색) 모양.
 
-    python tools/make_icons.py
+    python tools/make_icons.py            # 실제 앱 아이콘
+    python tools/make_icons.py --preview  # 미리 보기 아이콘 (주황 바탕 — 홈 화면에서 실제 앱과 구별)
 
 icons/ 에 icon-192.png, icon-512.png, maskable-512.png, apple-touch-icon.png, icon.svg 를 만든다.
+미리 보기는 preview-192.png, preview-512.png, preview-maskable-512.png, preview-apple-touch-icon.png.
 """
 import os
+import sys
 from PIL import Image, ImageDraw
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -75,6 +78,15 @@ def svg(safe=0.72, size=512):
 
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
+    if "--preview" in sys.argv:
+        # 미리 보기: 주황(종이 디자인의 --flag) 바탕, 지금 단계 밑줄은 실제 앱의 초록
+        BG, MARK = (184, 85, 43), (31, 92, 74)
+        draw(192, True, 0.74).save(os.path.join(OUT, "preview-192.png"))
+        draw(512, True, 0.74).save(os.path.join(OUT, "preview-512.png"))
+        draw(512, False, 0.62).save(os.path.join(OUT, "preview-maskable-512.png"))
+        draw(180, False, 0.70).convert("RGB").save(os.path.join(OUT, "preview-apple-touch-icon.png"))
+        print("preview icons ->", OUT)
+        sys.exit(0)
     draw(192, True, 0.74).save(os.path.join(OUT, "icon-192.png"))
     draw(512, True, 0.74).save(os.path.join(OUT, "icon-512.png"))
     draw(512, False, 0.62).save(os.path.join(OUT, "maskable-512.png"))  # 안전 영역(가운데 80%) 안에 그림
