@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>테스트</title>
+    <style>
+      body { font: 14px/1.5 ui-monospace, Consolas, monospace; padding: 16px; }
+      #summary.pass { color: #1a7f37; }
+      #summary.fail { color: #cf222e; }
+    </style>
+  </head>
+  <body>
+    <h1 id="summary">실행 중…</h1>
+    <pre id="out"></pre>
+    <script type="module">
+      import { run } from './harness.js';
+      import { UNIT_TESTS, DOM_TESTS } from './list.js';
+      const out = document.getElementById('out');
+      const filter = new URLSearchParams(location.search).get('f') || undefined;
+      for (const f of [...UNIT_TESTS, ...DOM_TESTS]) await import(f);
+      const { pass, fail } = await run((s) => (out.textContent += s + '\n'), filter);
+      const sum = document.getElementById('summary');
+      sum.textContent = `${pass} passed, ${fail} failed`;
+      sum.className = fail ? 'fail' : 'pass';
+      window.__testResult = { pass, fail };
+    </script>
+  </body>
+</html>

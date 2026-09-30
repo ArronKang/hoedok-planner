@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#f5f7fa" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="계획을 세우고, 실행하고, 결과를 되돌아보는 공부 플래너" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="회독 플래너" />
+    <meta name="format-detection" content="telephone=no" />
+    <title>회독 플래너</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
+    <link rel="stylesheet" href="styles/base.css" />
+    <link rel="stylesheet" href="styles/components.css" />
+    <link rel="stylesheet" href="styles/views.css" />
+    <script>
+      // 첫 화면이 번쩍이지 않도록 저장된 테마/글자 크기를 먼저 적용
+      (function () {
+        try {
+          var s = JSON.parse(localStorage.getItem('sp.device.v1') || '{}');
+          var t = s.theme === 'light' || s.theme === 'dark' ? s.theme : window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          var r = document.documentElement;
+          r.dataset.theme = t;
+          r.dataset.fs = s.fontSize || 'md';
+          r.dataset.density = s.density || 'comfortable';
+          r.dataset.tool = s.toolSide || 'right';
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <div class="boot"><div class="boot-mark"></div><p>불러오는 중…</p></div>
+    </div>
+    <noscript>이 앱은 자바스크립트가 필요합니다.</noscript>
+    <script type="module" src="src/app.js"></script>
+  </body>
+</html>

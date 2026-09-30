@@ -1,0 +1,84 @@
+"""앱 아이콘 만들기: 진도 칸(단계마다 한 칸, 채워진 만큼 색) 모양.
+
+    python tools/make_icons.py
+
+icons/ 에 icon-192.png, icon-512.png, maskable-512.png, apple-touch-icon.png, icon.svg 를 만든다.
+"""
+import os
+from PIL import Image, ImageDraw
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT = os.path.join(ROOT, "icons")
+
+BG = (31, 92, 74)        # 종이 디자인의 초록 (--accent)
+INK = (244, 241, 232)    # 종이 색
+MARK = (232, 135, 90)    # 지금 단계 밑줄
+CELLS = [(0.26, 1.0), (0.20, 1.0), (0.30, 0.5), (0.24, 0.0)]  # (너비 비율, 채운 비율)
+
+
+def geometry(size, safe):
+    """safe: 그림이 들어갈 가운데 영역 비율 (maskable은 작게)"""
+    w = size * safe
+    x0 = (size - w) / 2
+    h = size * 0.115 * (safe / 0.72)
+    y0 = size / 2 - h / 2 - size * 0.02
+    gap = size * 0.028 * (safe / 0.72)
+    total = w - gap * (len(CELLS) - 1)
+    cells, x = [], x0
+    for frac, fill in CELLS:
+        cw = total * frac
+        cells.append((x, y0, cw, h, fill))
+        x += cw + gap
+    return cells
+
+
+def draw(size, rounded, safe):
+    k = 4  # 크게 그려서 줄이면 가장자리가 매끈하다
+    S = size * k
+    img = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    if rounded:
+        d.rounded_rectangle([0, 0, S - 1, S - 1], radius=S * 0.22, fill=BG)
+    else:
+        d.rectangle([0, 0, S, S], fill=BG)
+    r = S * 0.018
+    line = max(2, int(S * 0.012))
+    for i, (x, y, w, h, fill) in enumerate(geometry(S, safe)):
+        box = [x, y, x + w, y + h]
+        if fill >= 1:
+            d.rounded_rectangle(box, radius=r, fill=INK)
+        else:
+            d.rounded_rectangle(box, radius=r, outline=INK + (150,), width=line)
+            if fill > 0:
+                d.rounded_rectangle([x, y, x + w * fill, y + h], radius=r, fill=INK)
+        if i == 2:  # 지금 하는 단계 밑줄
+            d.rectangle([x, y + h + S * 0.035, x + w, y + h + S * 0.035 + line * 2.2], fill=MARK)
+    return img.resize((size, size), Image.LANCZOS)
+
+
+def svg(safe=0.72, size=512):
+    parts = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {size} {size}">',
+             f'<rect width="{size}" height="{size}" rx="{size*0.22:.1f}" fill="rgb{BG}"/>']
+    r = size * 0.018
+    for i, (x, y, w, h, fill) in enumerate(geometry(size, safe)):
+        if fill >= 1:
+            parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w:.1f}" height="{h:.1f}" rx="{r:.1f}" fill="rgb{INK}"/>')
+        else:
+            parts.append(f'<rect x="{x+3:.1f}" y="{y+3:.1f}" width="{w-6:.1f}" height="{h-6:.1f}" rx="{r:.1f}" fill="none" stroke="rgb{INK}" stroke-opacity=".6" stroke-width="6"/>')
+            if fill > 0:
+                parts.append(f'<rect x="{x:.1f}" y="{y:.1f}" width="{w*fill:.1f}" height="{h:.1f}" rx="{r:.1f}" fill="rgb{INK}"/>')
+        if i == 2:
+            parts.append(f'<rect x="{x:.1f}" y="{y+h+size*0.035:.1f}" width="{w:.1f}" height="{size*0.026:.1f}" fill="rgb{MARK}"/>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+if __name__ == "__main__":
+    os.makedirs(OUT, exist_ok=True)
+    draw(192, True, 0.74).save(os.path.join(OUT, "icon-192.png"))
+    draw(512, True, 0.74).save(os.path.join(OUT, "icon-512.png"))
+    draw(512, False, 0.62).save(os.path.join(OUT, "maskable-512.png"))  # 안전 영역(가운데 80%) 안에 그림
+    draw(180, False, 0.70).convert("RGB").save(os.path.join(OUT, "apple-touch-icon.png"))  # iOS는 모서리를 알아서 둥글게
+    with open(os.path.join(OUT, "icon.svg"), "w", encoding="utf-8") as f:
+        f.write(svg())
+    print("icons ->", OUT)

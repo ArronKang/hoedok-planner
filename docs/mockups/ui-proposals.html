@@ -1,0 +1,690 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>회독 트랙 UI 안</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" />
+    <style>
+      :root {
+        --paper: #0b0f15;
+        --surface: #151b24;
+        --surface-2: #1d242f;
+        --surface-3: #262f3c;
+        --line: #252d39;
+        --line-2: #38424f;
+        --ink: #e8ecf2;
+        --ink-2: #aeb7c4;
+        --ink-3: #7d8899;
+        --accent: #8aa3ff;
+        --ok: #3ecf8e;
+        --s-soc: #ff8a3d;
+        --s-math: #6f8dff;
+        --s-eng: #a878ff;
+        --s-kor: #ff6b6b;
+        --font: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif;
+        --num: 'IBM Plex Mono', monospace;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--font);
+        line-height: 1.55;
+        word-break: keep-all;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 1180px; margin: 0 auto; padding: 40px 20px 100px; }
+      .num { font-family: var(--num); font-feature-settings: 'tnum' 1; }
+
+      /* ── 문서 머리 ── */
+      .doc-head { border-bottom: 1px solid var(--line); padding-bottom: 28px; margin-bottom: 40px; }
+      .doc-head h1 { font-size: clamp(26px, 5vw, 38px); letter-spacing: -.035em; margin: 0 0 10px; }
+      .doc-head p { color: var(--ink-2); margin: 0; max-width: 62ch; font-size: 15px; }
+      .kicker { font-size: 12px; font-weight: 700; letter-spacing: .1em; color: var(--accent); margin-bottom: 10px; }
+
+      .note { border-left: 2px solid var(--accent); background: rgba(138,163,255,.07); padding: 12px 16px; border-radius: 0 10px 10px 0; font-size: 14px; color: var(--ink-2); margin: 20px 0 0; }
+      .note b { color: var(--ink); }
+
+      /* ── 옵션 섹션 ── */
+      .opt { margin-top: 68px; }
+      .opt-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+      .badge { font-family: var(--num); font-size: 12px; font-weight: 600; color: var(--paper); background: var(--accent); padding: 3px 9px; border-radius: 6px; letter-spacing: .04em; }
+      .opt-head h2 { font-size: 26px; letter-spacing: -.03em; margin: 0; }
+      .opt-head .q { font-size: 14px; color: var(--ink-3); }
+      .opt-desc { color: var(--ink-2); max-width: 66ch; margin: 0 0 24px; font-size: 15px; }
+
+      .frames { display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+      .fr { flex: 0 0 auto; }
+      .fr-cap { font-size: 12px; color: var(--ink-3); text-align: center; margin-top: 10px; letter-spacing: .02em; }
+
+      /* ── 기기 틀 ── */
+      .phone { width: 340px; height: 690px; border-radius: 34px; border: 1px solid var(--line-2); background: var(--paper); overflow: hidden; display: flex; flex-direction: column; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+      .tablet { width: 720px; height: 500px; border-radius: 18px; border: 1px solid var(--line-2); background: var(--paper); overflow: hidden; display: flex; box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+      @media (max-width: 800px) {
+        .tablet { width: 100%; height: 420px; }
+        .phone { width: 100%; max-width: 340px; }
+      }
+
+      /* ── 앱 공통 조각 ── */
+      .topbar { flex: none; display: flex; align-items: center; gap: 10px; padding: 16px 16px 10px; }
+      .topbar h3 { margin: 0; font-size: 19px; letter-spacing: -.02em; }
+      .dday { font-family: var(--num); font-size: 12px; font-weight: 600; color: var(--paper); background: var(--ok); padding: 2px 7px; border-radius: 5px; }
+      .exam-line { font-size: 12px; color: var(--ink-3); padding: 0 16px 12px; }
+      .scroll { flex: 1; overflow: hidden; padding: 0 12px; display: flex; flex-direction: column; gap: 10px; }
+      .tabs { flex: none; display: flex; border-top: 1px solid var(--line); padding: 7px 0 10px; background: var(--surface); }
+      .tabs div { flex: 1; text-align: center; font-size: 10.5px; color: var(--ink-3); font-weight: 600; }
+      .tabs div.on { color: var(--accent); }
+      .tabs i { display: block; width: 18px; height: 18px; margin: 0 auto 3px; border: 1.6px solid currentColor; border-radius: 4px; opacity: .85; }
+      .tabs div.on i { background: rgba(138,163,255,.18); }
+
+      .card { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 13px 14px; }
+      .card-t { display: flex; align-items: center; gap: 7px; margin-bottom: 10px; }
+      .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--sc); flex: none; }
+      .card-t b { font-size: 14.5px; font-weight: 700; letter-spacing: -.01em; }
+      .card-t .pct { margin-left: auto; font-family: var(--num); font-size: 15px; font-weight: 600; color: var(--sc); }
+      .card-t .sub { font-size: 11px; color: var(--ink-3); font-weight: 500; }
+
+      /* ── 사실 수치 4종 ── */
+      .facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin-top: 11px; }
+      .facts > div { background: var(--surface); padding: 7px 7px 6px; min-width: 0; }
+      .facts .k { font-size: 9.5px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+      .facts .v { font-family: var(--num); font-size: 14px; font-weight: 600; white-space: nowrap; }
+      .facts .u { font-family: var(--font); font-size: 9.5px; color: var(--ink-3); font-weight: 500; margin-left: 1px; }
+
+      /* ════ 안 A : 진도 띠 ════ */
+      .band { display: flex; gap: 2px; height: 26px; }
+      .band .seg { position: relative; background: var(--surface-3); border-radius: 3px; overflow: hidden; min-width: 4px; }
+      .band .seg i { position: absolute; inset: 0 auto 0 0; background: var(--sc); border-radius: 3px; }
+      .band .seg.doing i { background: repeating-linear-gradient(115deg, var(--sc) 0 6px, color-mix(in srgb, var(--sc) 62%, transparent) 6px 12px); }
+      .band .seg.todo { background: transparent; border: 1px dashed var(--line-2); }
+      .band-labels { display: flex; gap: 2px; margin-top: 6px; }
+      .band-labels span { font-size: 9px; color: var(--ink-3); line-height: 1.25; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .band-labels span.act { color: var(--ink); font-weight: 700; }
+      .band-scale { display: flex; justify-content: space-between; font-family: var(--num); font-size: 9.5px; color: var(--ink-3); margin-top: 7px; }
+      .now { display: flex; align-items: baseline; gap: 7px; margin-top: 8px; font-size: 11px; }
+      .now b { font-weight: 700; color: var(--ink); }
+      .now .num { color: var(--ink-3); font-size: 10px; margin-left: auto; }
+      .here { position: absolute; top: -6px; bottom: -6px; width: 2px; background: var(--ink); border-radius: 1px; }
+      .here::after { content: ''; position: absolute; top: -4px; left: -3px; border: 4px solid transparent; border-top-color: var(--ink); }
+      .band-wrap { position: relative; }
+
+      /* ════ 안 B : 회독 겹 ════ */
+      .layers { display: flex; flex-direction: column; gap: 5px; }
+      .lay { display: flex; align-items: center; gap: 8px; }
+      .lay .nm { flex: 0 0 74px; font-size: 10.5px; color: var(--ink-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .lay .cells { flex: 1; display: flex; gap: 2px; }
+      .lay .cells span { flex: 1; height: 19px; border-radius: 3px; background: var(--surface-3); position: relative; }
+      .lay .cells span.f { background: var(--sc); }
+      .lay .cells span.h { background: linear-gradient(90deg, var(--sc) 55%, var(--surface-3) 55%); }
+      .lay .cells span.n { background: transparent; border: 1px dashed var(--line-2); }
+      .lay .r { flex: 0 0 34px; font-family: var(--num); font-size: 10.5px; color: var(--ink-3); text-align: right; }
+      .axis { display: flex; gap: 2px; margin: 8px 0 0 82px; }
+      .axis span { flex: 1; text-align: center; font-size: 9px; color: var(--ink-3); }
+      .depth { display: flex; gap: 2px; margin: 9px 0 0 82px; align-items: flex-end; height: 26px; }
+      .depth span { flex: 1; background: rgba(138,163,255,.3); border-radius: 2px 2px 0 0; position: relative; }
+      .depth span b { position: absolute; top: -12px; left: 0; right: 0; text-align: center; font-family: var(--num); font-size: 9px; color: var(--ink-3); font-weight: 500; }
+      .depth-cap { margin: 5px 0 0 82px; font-size: 9.5px; color: var(--ink-3); }
+
+      /* ════ 안 C : 진도 보드 ════ */
+      .board { width: 100%; border-collapse: separate; border-spacing: 3px; }
+      .board th { font-size: 9.5px; color: var(--ink-3); font-weight: 600; padding-bottom: 2px; }
+      .board th.sj { text-align: left; width: 68px; }
+      .board td.sj { font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+      .board td.sj span { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--sc); margin-right: 5px; }
+      .cell { height: 26px; border-radius: 4px; background: var(--surface-3); position: relative; }
+      .cell.f { background: var(--sc); }
+      .cell.h::after { content: ''; position: absolute; inset: 0 auto 0 0; width: var(--p); background: var(--sc); border-radius: 4px; }
+      .cell.n { background: transparent; border: 1px dashed var(--line-2); }
+      .cell.x { background: transparent; }
+      .board td.tot { font-family: var(--num); font-size: 12px; font-weight: 600; text-align: right; width: 38px; color: var(--sc); }
+
+      /* ── 태블릿 3분할 ── */
+      .side { flex: 0 0 96px; border-right: 1px solid var(--line); padding: 14px 8px; display: flex; flex-direction: column; gap: 3px; background: var(--surface); }
+      .side div { font-size: 12px; color: var(--ink-3); padding: 8px 10px; border-radius: 8px; font-weight: 600; }
+      .side div.on { background: var(--surface-3); color: var(--ink); }
+      .mid { flex: 0 0 216px; border-right: 1px solid var(--line); padding: 12px 10px; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+      .det { flex: 1; padding: 16px 18px; overflow: hidden; display: flex; flex-direction: column; gap: 12px; }
+      .det h4 { margin: 0; font-size: 18px; letter-spacing: -.02em; }
+      .mini { background: var(--surface); border: 1px solid var(--line); border-radius: 11px; padding: 9px 11px; }
+      .mini.on { border-color: var(--sc); background: color-mix(in srgb, var(--sc) 11%, var(--surface)); }
+      .mini .r1 { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; }
+      .mini .r1 .pct { margin-left: auto; font-family: var(--num); font-size: 12px; color: var(--ink-2); }
+      .mini .bar { height: 5px; border-radius: 3px; background: var(--surface-3); margin-top: 7px; overflow: hidden; }
+      .mini .bar i { display: block; height: 100%; background: var(--sc); border-radius: 3px; }
+
+      /* ── 섹션 목록 (상세) ── */
+      .seclist { display: flex; flex-direction: column; gap: 4px; }
+      .sec { display: flex; align-items: center; gap: 8px; font-size: 11.5px; padding: 5px 8px; border-radius: 7px; background: var(--surface); }
+      .sec .i { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--line-2); flex: none; }
+      .sec.done .i { background: var(--sc); border-color: var(--sc); }
+      .sec.doing .i { background: linear-gradient(90deg, var(--sc) 55%, transparent 55%); border-color: var(--sc); }
+      .sec .p { margin-left: auto; font-family: var(--num); font-size: 10.5px; color: var(--ink-3); }
+      .sec.done .nm { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--line-2); }
+
+      /* ── 장단점 ── */
+      .verdict { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 24px; max-width: 900px; }
+      @media (max-width: 700px) { .verdict { grid-template-columns: 1fr; } }
+      .verdict div { border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; background: var(--surface); }
+      .verdict h5 { margin: 0 0 7px; font-size: 12px; letter-spacing: .02em; }
+      .verdict.v ul { margin: 0; padding-left: 17px; font-size: 13.5px; color: var(--ink-2); }
+      .verdict li + li { margin-top: 4px; }
+      .good h5 { color: var(--ok); }
+      .bad h5 { color: #ff8f8f; }
+
+      .rec { margin-top: 74px; border: 1px solid var(--accent); background: rgba(138,163,255,.07); border-radius: 16px; padding: 24px 26px; }
+      .rec h2 { margin: 0 0 12px; font-size: 22px; letter-spacing: -.02em; }
+      .rec p { color: var(--ink-2); font-size: 15px; margin: 0 0 10px; max-width: 70ch; }
+      .rec p:last-child { margin-bottom: 0; }
+      .rec b { color: var(--ink); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="doc-head">
+        <div class="kicker">회독 트랙 · UI 다시 짜기</div>
+        <h1>회독 진도를 그리는 세 가지 방법</h1>
+        <p>
+          같은 데이터(섹션 이름 + 교재 + 페이지 범위 + 완료 쪽수)를 화면에 어떻게 그릴지에 대한 안입니다.
+          색과 글꼴은 셋 다 똑같이 맞춰 뒀으니 <b>구조만</b> 비교해서 골라 주세요.
+        </p>
+        <div class="note">
+          <b>구조 변경:</b> 트랙을 시험 화면 안에 넣어 뒀던 걸 하단 탭 최상위로 뺐습니다 — 오늘 · <b>트랙</b> · 성적 · 분석 · 설정.
+          보내주신 그림과 같습니다.<br />
+          <b>한 가지 뺀 것:</b> 그림에 있던 "현재 속도 완료 10/16"은 넣지 않았습니다. 인수인계서의 예측 금지 규칙에 걸립니다.
+          대신 남은 분량 · 남은 일수 · 지금까지 일평균 · 필요 처리량 네 숫자만 나란히 둡니다.
+        </div>
+      </header>
+
+      <!-- ══════════ 안 A ══════════ -->
+      <section class="opt">
+        <div class="opt-head">
+          <span class="badge">안 A</span>
+          <h2>진도 띠</h2>
+          <span class="q">답하는 질문 — "어디까지 왔나?"</span>
+        </div>
+        <p class="opt-desc">
+          보내주신 스케치 그대로입니다. 띠 하나가 과목 하나고, 띠를 회독 섹션으로 나눕니다.
+          <b>칸 너비가 실제 분량(쪽수)에 비례</b>하므로 "6개 중 2개 끝"이 아니라 "220쪽 중 75쪽"이 눈에 보입니다.
+          검은 세로선이 지금 위치입니다.
+        </p>
+
+        <div class="frames">
+          <!-- 폰 -->
+          <div class="fr">
+            <div class="phone">
+              <div class="topbar"><h3>트랙</h3><span class="dday">D-12</span></div>
+              <div class="exam-line">2학기 중간고사 · 10월 10일</div>
+              <div class="scroll">
+                <!-- 통합사회 -->
+                <div class="card" style="--sc: var(--s-soc)">
+                  <div class="card-t">
+                    <span class="dot"></span><b>통합사회</b>
+                    <span class="sub">2/6회독</span>
+                    <span class="pct">34%</span>
+                  </div>
+                  <div class="band-wrap">
+                    <div class="band">
+                      <div class="seg" style="flex:45"><i style="width:100%"></i></div>
+                      <div class="seg doing" style="flex:44"><i style="width:68%"></i></div>
+                      <div class="seg todo" style="flex:40"></div>
+                      <div class="seg todo" style="flex:36"></div>
+                      <div class="seg todo" style="flex:30"></div>
+                      <div class="seg todo" style="flex:25"></div>
+                      <div class="here" style="left:34%"></div>
+                    </div>
+                    <div class="now"><b>지금 2회독 · 자습서 뒷부분</b><span class="num">p.53–96 중 30쪽</span></div>
+                  </div>
+                  <div class="facts">
+                    <div><span class="k">남은 분량</span><span class="v">145<span class="u">쪽</span></span></div>
+                    <div><span class="k">남은 일수</span><span class="v">12<span class="u">일</span></span></div>
+                    <div><span class="k">일평균</span><span class="v">8.3<span class="u">쪽</span></span></div>
+                    <div><span class="k">필요</span><span class="v">12.1<span class="u">쪽</span></span></div>
+                  </div>
+                </div>
+
+                <!-- 공통수학 -->
+                <div class="card" style="--sc: var(--s-math)">
+                  <div class="card-t">
+                    <span class="dot"></span><b>공통수학</b><span class="sub">3/5회독</span><span class="pct">52%</span>
+                  </div>
+                  <div class="band-wrap">
+                    <div class="band">
+                      <div class="seg" style="flex:38"><i style="width:100%"></i></div>
+                      <div class="seg" style="flex:52"><i style="width:100%"></i></div>
+                      <div class="seg doing" style="flex:46"><i style="width:22%"></i></div>
+                      <div class="seg todo" style="flex:34"></div>
+                      <div class="seg todo" style="flex:28"></div>
+                      <div class="here" style="left:52%"></div>
+                    </div>
+                    <div class="now"><b>지금 3회독 · 개념 재정리</b><span class="num">p.1–46 중 10쪽</span></div>
+                  </div>
+                </div>
+
+                <!-- 공통영어 -->
+                <div class="card" style="--sc: var(--s-eng)">
+                  <div class="card-t">
+                    <span class="dot"></span><b>공통영어</b><span class="sub">격자 · 지문 12개</span><span class="pct">45%</span>
+                  </div>
+                  <div class="band-wrap">
+                    <div class="band">
+                      <div class="seg" style="flex:1"><i style="width:100%"></i></div>
+                      <div class="seg doing" style="flex:1"><i style="width:75%"></i></div>
+                      <div class="seg todo" style="flex:1"></div>
+                      <div class="seg todo" style="flex:1"></div>
+                    </div>
+                    <div class="now"><b>지금 2회독 · 어법·어휘</b><span class="num">지문 12개 중 9개</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="tabs">
+                <div><i></i>오늘</div><div class="on"><i></i>트랙</div><div><i></i>성적</div><div><i></i>분석</div><div><i></i>설정</div>
+              </div>
+            </div>
+            <div class="fr-cap">아이폰 — 과목마다 띠 하나</div>
+          </div>
+
+          <!-- 태블릿 -->
+          <div class="fr">
+            <div class="tablet">
+              <div class="side">
+                <div>오늘</div><div class="on">트랙</div><div>성적</div><div>분석</div><div>설정</div>
+              </div>
+              <div class="mid">
+                <div style="font-size:11px;color:var(--ink-3);padding:0 2px 2px">2학기 중간고사 · D-12</div>
+                <div class="mini on" style="--sc: var(--s-soc)">
+                  <div class="r1"><span class="dot"></span>통합사회<span class="pct">34%</span></div>
+                  <div class="bar"><i style="width:34%"></i></div>
+                </div>
+                <div class="mini" style="--sc: var(--s-math)">
+                  <div class="r1"><span class="dot"></span>공통수학<span class="pct">52%</span></div>
+                  <div class="bar"><i style="width:52%"></i></div>
+                </div>
+                <div class="mini" style="--sc: var(--s-eng)">
+                  <div class="r1"><span class="dot"></span>공통영어<span class="pct">45%</span></div>
+                  <div class="bar"><i style="width:45%"></i></div>
+                </div>
+                <div class="mini" style="--sc: var(--s-kor)">
+                  <div class="r1"><span class="dot"></span>공통국어<span class="pct">18%</span></div>
+                  <div class="bar"><i style="width:18%"></i></div>
+                </div>
+              </div>
+              <div class="det" style="--sc: var(--s-soc)">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <h4>통합사회</h4>
+                  <span style="font-size:11.5px;color:var(--ink-3)">시험범위 1~6단원 · 자습서 p.8–96</span>
+                  <span class="num" style="margin-left:auto;font-size:26px;font-weight:600;color:var(--s-soc);letter-spacing:-.03em">34%</span>
+                </div>
+                <div class="band-wrap">
+                  <div class="band" style="height:34px">
+                    <div class="seg" style="flex:45"><i style="width:100%"></i></div>
+                    <div class="seg doing" style="flex:44"><i style="width:68%"></i></div>
+                    <div class="seg todo" style="flex:40"></div>
+                    <div class="seg todo" style="flex:36"></div>
+                    <div class="seg todo" style="flex:30"></div>
+                    <div class="seg todo" style="flex:25"></div>
+                    <div class="here" style="left:34%"></div>
+                  </div>
+                  <div class="band-labels" style="margin-top:7px">
+                    <span style="flex:45">1회독 자습서 1~3단원</span>
+                    <span style="flex:44" class="act">2회독 자습서 뒷부분</span>
+                    <span style="flex:40">3회독 평가문제집</span>
+                    <span style="flex:36">4회독 심화문제집</span>
+                    <span style="flex:30">5회독 학교기출</span>
+                    <span style="flex:25">6회독 족보</span>
+                  </div>
+                  <div class="band-scale"><span>0쪽</span><span>220쪽</span></div>
+                </div>
+                <div class="facts">
+                  <div><span class="k">남은 분량</span><span class="v">145<span class="u">쪽</span></span></div>
+                  <div><span class="k">남은 일수</span><span class="v">12<span class="u">일</span></span></div>
+                  <div><span class="k">지금까지 일평균</span><span class="v">8.3<span class="u">쪽/일</span></span></div>
+                  <div><span class="k">필요 처리량</span><span class="v">12.1<span class="u">쪽/일</span></span></div>
+                </div>
+                <div class="seclist">
+                  <div class="sec done"><span class="i"></span><span class="nm">1회독 · 자습서 1~3단원</span><span class="p">p.8–52 · 45/45</span></div>
+                  <div class="sec doing"><span class="i"></span><span class="nm">2회독 · 자습서 뒷부분</span><span class="p">p.53–96 · 30/44</span></div>
+                  <div class="sec"><span class="i"></span><span class="nm">3회독 · 평가문제집</span><span class="p">p.1–40 · 0/40</span></div>
+                </div>
+              </div>
+            </div>
+            <div class="fr-cap">갤럭시 탭 가로 — 메뉴 + 과목 목록 + 띠 상세</div>
+          </div>
+        </div>
+
+        <div class="verdict v">
+          <div class="good">
+            <h5>좋은 점</h5>
+            <ul>
+              <li>말씀하신 스케치와 정확히 같습니다.</li>
+              <li>칸 너비 = 실제 쪽수라 "끝이 얼마나 남았나"가 체감됩니다.</li>
+              <li>과목 여러 개를 세로로 쌓아도 한 줄씩이라 폰에서 짧습니다.</li>
+            </ul>
+          </div>
+          <div class="bad">
+            <h5>아쉬운 점</h5>
+            <ul>
+              <li>폰에서는 섹션 이름을 다 못 보여줘서 현재 섹션만 적었습니다 (전체 이름은 눌러서 확인).</li>
+              <li>"1단원을 몇 번 봤나" 같은 깊이는 안 보입니다.</li>
+              <li>회독을 건너뛰며(3회독 먼저) 하면 띠 순서와 안 맞습니다.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ 안 B ══════════ -->
+      <section class="opt">
+        <div class="opt-head">
+          <span class="badge">안 B</span>
+          <h2>회독 겹</h2>
+          <span class="q">답하는 질문 — "어디를 몇 번 봤나?"</span>
+        </div>
+        <p class="opt-desc">
+          가로축을 <b>시험 범위(단원)</b>로 고정하고, 회독마다 한 줄씩 아래로 쌓습니다.
+          회독은 같은 범위를 다시 덮는 일이니까 겹으로 보는 게 실제에 가깝습니다.
+          세로로 훑으면 <b>어느 단원이 얇게 덮였는지</b>가 바로 보입니다 — 아래 파란 막대가 단원별 덮인 횟수입니다.
+        </p>
+
+        <div class="frames">
+          <div class="fr">
+            <div class="phone">
+              <div class="topbar"><h3>트랙</h3><span class="dday">D-12</span></div>
+              <div class="exam-line">2학기 중간고사 · 10월 10일</div>
+              <div class="scroll">
+                <div class="card" style="--sc: var(--s-soc)">
+                  <div class="card-t"><span class="dot"></span><b>통합사회</b><span class="pct">34%</span></div>
+                  <div class="layers">
+                    <div class="lay"><span class="nm">1회독 개념</span><span class="cells"><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span></span><span class="r">100%</span></div>
+                    <div class="lay"><span class="nm">2회독 기본</span><span class="cells"><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="h"></span><span></span></span><span class="r">75%</span></div>
+                    <div class="lay"><span class="nm">3회독 개념</span><span class="cells"><span class="f"></span><span class="f"></span><span></span><span></span><span></span><span></span></span><span class="r">33%</span></div>
+                    <div class="lay"><span class="nm">4회독 심화</span><span class="cells"><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span></span><span class="r">0%</span></div>
+                  </div>
+                  <div class="axis"><span>1단</span><span>2단</span><span>3단</span><span>4단</span><span>5단</span><span>6단</span></div>
+                  <div class="depth">
+                    <span style="height:100%"><b>3</b></span><span style="height:100%"><b>3</b></span>
+                    <span style="height:66%"><b>2</b></span><span style="height:66%"><b>2</b></span>
+                    <span style="height:50%"><b>1.5</b></span><span style="height:33%"><b>1</b></span>
+                  </div>
+                  <div class="depth-cap">단원별 덮은 횟수 — 5·6단원이 얇습니다</div>
+                  <div class="facts">
+                    <div><span class="k">남은 분량</span><span class="v">145<span class="u">쪽</span></span></div>
+                    <div><span class="k">남은 일수</span><span class="v">12<span class="u">일</span></span></div>
+                    <div><span class="k">일평균</span><span class="v">8.3<span class="u">쪽</span></span></div>
+                    <div><span class="k">필요</span><span class="v">12.1<span class="u">쪽</span></span></div>
+                  </div>
+                </div>
+
+                <div class="card" style="--sc: var(--s-eng)">
+                  <div class="card-t"><span class="dot"></span><b>공통영어</b><span class="sub">지문 × 회독</span><span class="pct">45%</span></div>
+                  <div class="layers">
+                    <div class="lay"><span class="nm">1회독 해석</span><span class="cells"><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span></span><span class="r">100%</span></div>
+                    <div class="lay"><span class="nm">2회독 어법</span><span class="cells"><span class="f"></span><span class="f"></span><span class="f"></span><span class="h"></span><span></span><span></span></span><span class="r">58%</span></div>
+                    <div class="lay"><span class="nm">3회독 빈칸</span><span class="cells"><span class="f"></span><span></span><span></span><span></span><span></span><span></span></span><span class="r">16%</span></div>
+                    <div class="lay"><span class="nm">4회독 변형</span><span class="cells"><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span></span><span class="r">0%</span></div>
+                  </div>
+                  <div class="axis"><span>1과</span><span>2과</span><span>3과</span><span>4과</span><span>5과</span><span>6과</span></div>
+                </div>
+              </div>
+              <div class="tabs"><div><i></i>오늘</div><div class="on"><i></i>트랙</div><div><i></i>성적</div><div><i></i>분석</div><div><i></i>설정</div></div>
+            </div>
+            <div class="fr-cap">아이폰 — 회독이 아래로 쌓임</div>
+          </div>
+
+          <div class="fr">
+            <div class="tablet">
+              <div class="side"><div>오늘</div><div class="on">트랙</div><div>성적</div><div>분석</div><div>설정</div></div>
+              <div class="mid">
+                <div style="font-size:11px;color:var(--ink-3);padding:0 2px 2px">2학기 중간고사 · D-12</div>
+                <div class="mini on" style="--sc: var(--s-soc)"><div class="r1"><span class="dot"></span>통합사회<span class="pct">34%</span></div><div class="bar"><i style="width:34%"></i></div></div>
+                <div class="mini" style="--sc: var(--s-math)"><div class="r1"><span class="dot"></span>공통수학<span class="pct">52%</span></div><div class="bar"><i style="width:52%"></i></div></div>
+                <div class="mini" style="--sc: var(--s-eng)"><div class="r1"><span class="dot"></span>공통영어<span class="pct">45%</span></div><div class="bar"><i style="width:45%"></i></div></div>
+                <div class="mini" style="--sc: var(--s-kor)"><div class="r1"><span class="dot"></span>공통국어<span class="pct">18%</span></div><div class="bar"><i style="width:18%"></i></div></div>
+              </div>
+              <div class="det" style="--sc: var(--s-soc)">
+                <div style="display:flex;align-items:baseline;gap:9px">
+                  <h4>통합사회</h4>
+                  <span style="font-size:11.5px;color:var(--ink-3)">시험범위 1~6단원</span>
+                  <span class="num" style="margin-left:auto;font-size:26px;font-weight:600;color:var(--s-soc);letter-spacing:-.03em">34%</span>
+                </div>
+                <div class="layers">
+                  <div class="lay"><span class="nm">1회독 개념</span><span class="cells"><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span></span><span class="r">100%</span></div>
+                  <div class="lay"><span class="nm">2회독 기본문제</span><span class="cells"><span class="f"></span><span class="f"></span><span class="f"></span><span class="f"></span><span class="h"></span><span></span></span><span class="r">75%</span></div>
+                  <div class="lay"><span class="nm">3회독 개념</span><span class="cells"><span class="f"></span><span class="f"></span><span></span><span></span><span></span><span></span></span><span class="r">33%</span></div>
+                  <div class="lay"><span class="nm">4회독 심화문제</span><span class="cells"><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span></span><span class="r">0%</span></div>
+                  <div class="lay"><span class="nm">5회독 학교기출</span><span class="cells"><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span><span class="n"></span></span><span class="r">0%</span></div>
+                </div>
+                <div class="axis"><span>1단원</span><span>2단원</span><span>3단원</span><span>4단원</span><span>5단원</span><span>6단원</span></div>
+                <div class="depth">
+                  <span style="height:100%"><b>3</b></span><span style="height:100%"><b>3</b></span>
+                  <span style="height:66%"><b>2</b></span><span style="height:66%"><b>2</b></span>
+                  <span style="height:50%"><b>1.5</b></span><span style="height:33%"><b>1</b></span>
+                </div>
+                <div class="depth-cap">단원별 덮은 횟수</div>
+                <div class="facts">
+                  <div><span class="k">남은 분량</span><span class="v">145<span class="u">쪽</span></span></div>
+                  <div><span class="k">남은 일수</span><span class="v">12<span class="u">일</span></span></div>
+                  <div><span class="k">지금까지 일평균</span><span class="v">8.3<span class="u">쪽/일</span></span></div>
+                  <div><span class="k">필요 처리량</span><span class="v">12.1<span class="u">쪽/일</span></span></div>
+                </div>
+              </div>
+            </div>
+            <div class="fr-cap">갤럭시 탭 가로 — 겹 + 단원별 깊이</div>
+          </div>
+        </div>
+
+        <div class="verdict v">
+          <div class="good">
+            <h5>좋은 점</h5>
+            <ul>
+              <li>"5·6단원은 한 번밖에 안 봤네"가 그림으로 바로 보입니다 — 자기 객관화에 제일 셉니다.</li>
+              <li>회독을 건너뛰거나 되돌아가도 그대로 표현됩니다.</li>
+              <li>영어 격자(지문 × 회독)와 같은 모양이라 과목마다 따로 배울 게 없습니다.</li>
+            </ul>
+          </div>
+          <div class="bad">
+            <h5>아쉬운 점</h5>
+            <ul>
+              <li>과목 하나가 세로로 길어서 폰에서 2~3개밖에 안 보입니다.</li>
+              <li>범위를 단원으로 쪼개 두는 입력이 한 번 필요합니다.</li>
+              <li>"전체 몇 %"는 A만큼 직관적이지 않습니다.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ 안 C ══════════ -->
+      <section class="opt">
+        <div class="opt-head">
+          <span class="badge">안 C</span>
+          <h2>진도 보드</h2>
+          <span class="q">답하는 질문 — "과목끼리 비교하면?"</span>
+        </div>
+        <p class="opt-desc">
+          세로는 과목, 가로는 회독 차수. 한 화면에 시험 전체가 들어옵니다.
+          <b>어느 과목이 뒤처졌는지</b>를 고개 한 번 안 돌리고 보게 하는 게 목적입니다.
+          칸을 누르면 그 과목 그 회독의 섹션 목록이 열립니다.
+        </p>
+
+        <div class="frames">
+          <div class="fr">
+            <div class="phone">
+              <div class="topbar"><h3>트랙</h3><span class="dday">D-12</span></div>
+              <div class="exam-line">2학기 중간고사 · 10월 10일 · 전체 37%</div>
+              <div class="scroll">
+                <div class="card">
+                  <table class="board">
+                    <tr>
+                      <th class="sj"></th><th>1회독</th><th>2회독</th><th>3회독</th><th>4회독</th><th>5회독</th><th></th>
+                    </tr>
+                    <tr style="--sc: var(--s-soc)">
+                      <td class="sj"><span></span>통합사회</td>
+                      <td><div class="cell f"></div></td>
+                      <td><div class="cell h" style="--p:68%"></div></td>
+                      <td><div class="cell"></div></td>
+                      <td><div class="cell"></div></td>
+                      <td><div class="cell n"></div></td>
+                      <td class="tot">34%</td>
+                    </tr>
+                    <tr style="--sc: var(--s-math)">
+                      <td class="sj"><span></span>공통수학</td>
+                      <td><div class="cell f"></div></td>
+                      <td><div class="cell f"></div></td>
+                      <td><div class="cell h" style="--p:22%"></div></td>
+                      <td><div class="cell"></div></td>
+                      <td><div class="cell n"></div></td>
+                      <td class="tot">52%</td>
+                    </tr>
+                    <tr style="--sc: var(--s-eng)">
+                      <td class="sj"><span></span>공통영어</td>
+                      <td><div class="cell f"></div></td>
+                      <td><div class="cell h" style="--p:58%"></div></td>
+                      <td><div class="cell h" style="--p:16%"></div></td>
+                      <td><div class="cell"></div></td>
+                      <td><div class="cell x"></div></td>
+                      <td class="tot">45%</td>
+                    </tr>
+                    <tr style="--sc: var(--s-kor)">
+                      <td class="sj"><span></span>공통국어</td>
+                      <td><div class="cell h" style="--p:72%"></div></td>
+                      <td><div class="cell"></div></td>
+                      <td><div class="cell"></div></td>
+                      <td><div class="cell n"></div></td>
+                      <td><div class="cell x"></div></td>
+                      <td class="tot">18%</td>
+                    </tr>
+                  </table>
+                  <div style="font-size:10px;color:var(--ink-3);margin-top:10px;display:flex;gap:12px;flex-wrap:wrap">
+                    <span>■ 완료</span><span>▨ 진행 중</span><span>□ 예정</span><span>⌁ 안 함</span>
+                  </div>
+                </div>
+
+                <div class="card" style="--sc: var(--s-soc)">
+                  <div class="card-t"><span class="dot"></span><b>통합사회 · 2회독</b><span class="pct">68%</span></div>
+                  <div class="seclist">
+                    <div class="sec done"><span class="i"></span><span class="nm">자습서 4단원</span><span class="p">p.53–68</span></div>
+                    <div class="sec doing"><span class="i"></span><span class="nm">자습서 5단원</span><span class="p">p.69–82</span></div>
+                    <div class="sec"><span class="i"></span><span class="nm">자습서 6단원</span><span class="p">p.83–96</span></div>
+                  </div>
+                  <div class="facts">
+                    <div><span class="k">남은 분량</span><span class="v">145<span class="u">쪽</span></span></div>
+                    <div><span class="k">남은 일수</span><span class="v">12<span class="u">일</span></span></div>
+                    <div><span class="k">일평균</span><span class="v">8.3<span class="u">쪽</span></span></div>
+                    <div><span class="k">필요</span><span class="v">12.1<span class="u">쪽</span></span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="tabs"><div><i></i>오늘</div><div class="on"><i></i>트랙</div><div><i></i>성적</div><div><i></i>분석</div><div><i></i>설정</div></div>
+            </div>
+            <div class="fr-cap">아이폰 — 보드 + 고른 칸의 상세</div>
+          </div>
+
+          <div class="fr">
+            <div class="tablet">
+              <div class="side"><div>오늘</div><div class="on">트랙</div><div>성적</div><div>분석</div><div>설정</div></div>
+              <div class="det" style="padding:18px 22px">
+                <div style="display:flex;align-items:baseline;gap:10px">
+                  <h4>2학기 중간고사</h4>
+                  <span style="font-size:11.5px;color:var(--ink-3)">10월 10일 · D-12</span>
+                  <span class="num" style="margin-left:auto;font-size:26px;font-weight:600;letter-spacing:-.03em">37%</span>
+                </div>
+                <table class="board">
+                  <tr>
+                    <th class="sj"></th><th>1회독</th><th>2회독</th><th>3회독</th><th>4회독</th><th>5회독</th><th>6회독</th><th></th>
+                  </tr>
+                  <tr style="--sc: var(--s-soc)">
+                    <td class="sj"><span></span>통합사회</td>
+                    <td><div class="cell f"></div></td><td><div class="cell h" style="--p:68%"></div></td>
+                    <td><div class="cell"></div></td><td><div class="cell"></div></td>
+                    <td><div class="cell"></div></td><td><div class="cell"></div></td>
+                    <td class="tot">34%</td>
+                  </tr>
+                  <tr style="--sc: var(--s-math)">
+                    <td class="sj"><span></span>공통수학</td>
+                    <td><div class="cell f"></div></td><td><div class="cell f"></div></td>
+                    <td><div class="cell h" style="--p:22%"></div></td><td><div class="cell"></div></td>
+                    <td><div class="cell"></div></td><td><div class="cell x"></div></td>
+                    <td class="tot">52%</td>
+                  </tr>
+                  <tr style="--sc: var(--s-eng)">
+                    <td class="sj"><span></span>공통영어</td>
+                    <td><div class="cell f"></div></td><td><div class="cell h" style="--p:58%"></div></td>
+                    <td><div class="cell h" style="--p:16%"></div></td><td><div class="cell"></div></td>
+                    <td><div class="cell x"></div></td><td><div class="cell x"></div></td>
+                    <td class="tot">45%</td>
+                  </tr>
+                  <tr style="--sc: var(--s-kor)">
+                    <td class="sj"><span></span>공통국어</td>
+                    <td><div class="cell h" style="--p:72%"></div></td><td><div class="cell"></div></td>
+                    <td><div class="cell"></div></td><td><div class="cell n"></div></td>
+                    <td><div class="cell x"></div></td><td><div class="cell x"></div></td>
+                    <td class="tot">18%</td>
+                  </tr>
+                  <tr style="--sc: #62c23a">
+                    <td class="sj"><span></span>통합과학</td>
+                    <td><div class="cell f"></div></td><td><div class="cell h" style="--p:40%"></div></td>
+                    <td><div class="cell"></div></td><td><div class="cell"></div></td>
+                    <td><div class="cell x"></div></td><td><div class="cell x"></div></td>
+                    <td class="tot">28%</td>
+                  </tr>
+                  <tr style="--sc: #b07d56">
+                    <td class="sj"><span></span>한국사</td>
+                    <td><div class="cell f"></div></td><td><div class="cell f"></div></td>
+                    <td><div class="cell h" style="--p:30%"></div></td><td><div class="cell n"></div></td>
+                    <td><div class="cell x"></div></td><td><div class="cell x"></div></td>
+                    <td class="tot">58%</td>
+                  </tr>
+                </table>
+                <div class="facts" style="margin-top:14px">
+                  <div><span class="k">남은 분량 (전 과목)</span><span class="v">712<span class="u">쪽</span></span></div>
+                  <div><span class="k">남은 일수</span><span class="v">12<span class="u">일</span></span></div>
+                  <div><span class="k">지금까지 일평균</span><span class="v">46.1<span class="u">쪽/일</span></span></div>
+                  <div><span class="k">필요 처리량</span><span class="v">59.3<span class="u">쪽/일</span></span></div>
+                </div>
+              </div>
+            </div>
+            <div class="fr-cap">갤럭시 탭 가로 — 시험 전체가 한 화면</div>
+          </div>
+        </div>
+
+        <div class="verdict v">
+          <div class="good">
+            <h5>좋은 점</h5>
+            <ul>
+              <li>과목 6개를 한 화면에서 비교합니다. "국어만 안 했네"가 1초.</li>
+              <li>태블릿 가로 화면을 제일 잘 씁니다.</li>
+              <li>섹션 이름을 안 지어도 일단 쓸 수 있습니다.</li>
+            </ul>
+          </div>
+          <div class="bad">
+            <h5>아쉬운 점</h5>
+            <ul>
+              <li>칸 하나에 섹션 이름이 안 들어갑니다 — 눌러야 보입니다.</li>
+              <li>과목마다 회독 수가 다르면 빈칸이 생겨 지저분합니다.</li>
+              <li>말씀하신 "띠" 느낌과는 가장 멉니다.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <div class="rec">
+        <h2>제 추천 — A를 기본으로, C를 트랙 홈에</h2>
+        <p>
+          셋 다 <b>같은 데이터</b>를 쓰기 때문에 하나만 고를 필요가 없습니다. 이미 만들어 둔 계산 로직이
+          섹션 · 페이지 범위 · 완료 쪽수를 그대로 내주고 있어서, 그리는 방식만 갈아 끼우면 됩니다.
+        </p>
+        <p>
+          <b>과목 하나를 볼 때는 A(띠)</b>가 맞습니다. 말씀하신 그림이기도 하고, 칸 너비가 분량에 비례해서
+          "얼마나 남았나"가 가장 정직하게 보입니다.
+          <b>트랙 탭을 처음 열었을 때는 C(보드)</b>로 시험 전체를 먼저 보여주고, 과목을 누르면 A로 들어가는 흐름입니다.
+        </p>
+        <p>
+          <b>B(겹)</b>는 버리기 아깝습니다. "5·6단원을 한 번밖에 안 봤다"는 건 A·C 어디에도 안 나오는 정보고,
+          이게 원래 말씀하신 자기 객관화에 가장 가깝습니다. A 상세 화면 안에서 <b>띠 ↔ 겹 전환</b>으로 넣으면
+          입력 부담 없이 원할 때만 볼 수 있습니다.
+        </p>
+      </div>
+    </div>
+  </body>
+</html>

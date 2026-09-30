@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>회독 플래너 — 프로토타입 버전</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" crossorigin />
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; background: #0d0e11; color: #d6d9df; font-family: 'Pretendard Variable', Pretendard, -apple-system, system-ui, sans-serif; word-break: keep-all; }
+      main { max-width: 720px; margin: 0 auto; padding: 40px 16px 60px; }
+      h1 { font-size: 22px; color: #fff; margin: 0 0 6px; }
+      .lead { color: #8b909d; margin: 0 0 28px; font-size: 14px; line-height: 1.6; }
+      .v { display: block; border: 1px solid #262932; border-radius: 12px; padding: 18px 20px; margin-bottom: 12px; text-decoration: none; color: inherit; background: #14161b; }
+      .v:hover { border-color: #3b4050; }
+      .v .top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+      .v b { font-size: 17px; color: #fff; }
+      .tag { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #232733; color: #aab1be; }
+      .tag.new { background: #1d302a; color: #6dc0a2; }
+      .v p { margin: 8px 0 0; font-size: 14px; color: #aab1be; line-height: 1.6; }
+      .v ul { margin: 8px 0 0; padding-left: 18px; font-size: 14px; color: #aab1be; line-height: 1.7; }
+      .go { margin-left: auto; font-size: 13px; color: #6dc0a2; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>회독 플래너 프로토타입</h1>
+      <p class="lead">v3가 기본(원본)이에요. 새 기능은 복사본에 넣어서 따로 확인해요. 새 버전은 처음 열 때 v3 기록을 복사해 오고, 그 뒤로는 버전마다 따로 저장돼요.</p>
+
+      <a class="v" href="v5/index.html">
+        <div class="top"><b>v5</b><span class="tag new">최신 · v4 + 새 기능</span><span class="go">열기 ›</span></div>
+        <ul>
+          <li>그날만 공부 가능 시간 바꾸기 (학원 보충, 행사) → 나눌 때 반영</li>
+          <li>나눠 보기에 날마다 '예상 시간 / 공부 가능 시간'</li>
+          <li>끝낸 일에 걸린 시간 고르기 → 돌아보기에서 예상과 비교 · 지난주도 보기</li>
+          <li>내신 흐름: 시험마다 내 점수와 과목평균 그래프</li>
+          <li>할 일에 사진 넣기 (이 기기에 저장) · 메모가 바로 보임</li>
+          <li>파일로 내보내기 / 불러오기 · 학기 이름 바꾸기</li>
+        </ul>
+      </a>
+
+      <a class="v" href="v4/index.html">
+        <div class="top"><b>v4</b><span class="tag">v3 + 새 기능</span><span class="go">열기 ›</span></div>
+        <ul>
+          <li>시험이 끝난 뒤: 결과 적기 → 다음 시험 → 범위 쪽수만 확인 → 나눠서 시작</li>
+          <li>시험 없는 기간: '끝낼 날'만 정해서 나누기</li>
+          <li>영어처럼 지문으로 세는 과목: 지문 × 회독 격자</li>
+          <li>시험마다 틀린 이유 5가지, 한 줄 회고, 모아 보기</li>
+          <li>할 일: 중요도, 여러 번 하기, 시작 시각 · 마감순/시간순 보기</li>
+          <li>과목 성적 계산 방법(학점·평가 항목), 아직 점수가 안 나온 비중</li>
+        </ul>
+      </a>
+
+      <a class="v" href="v3/index.html">
+        <div class="top"><b>v3</b><span class="tag">원본 · 고치지 않음</span><span class="go">열기 ›</span></div>
+        <p>오늘 · 진도 · 성적 세 화면과 설정. 겉은 단순하게, 들어갈수록 깊게.</p>
+      </a>
+    </main>
+  </body>
+</html>
