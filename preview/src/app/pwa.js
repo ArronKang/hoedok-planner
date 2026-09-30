@@ -1,0 +1,79 @@
+// 서비스 워커(인터넷 없이 열기 + 홈 화면 설치). 새 버전이 준비되면 한 줄로 알려 준다.
+import { toast } from './core.js';
+import { PREVIEW, ns } from '../env.js';
+
+/**
+ * 미리 보기: 아무것도 저장하지 않는 서비스 워커(preview-sw.js)로 미리 보기 폴더만 맡는다.
+ * - 실제 앱의 서비스 워커가 미리 보기 주소까지 가로채서 옛 화면 틀을 주는 것을 막는다.
+ * - 실제 앱의 오프라인 저장(캐시)은 건드리지 않는다.
+ * 처음 한 번은 실제 앱의 서비스 워커가 옛 화면 틀을 줄 수 있다 → 미리 보기가 자리 잡으면 한 번 새로 연다.
+ */
+function registerPreviewSW() {
+  const wrongShell = !document.documentElement.hasAttribute('data-preview');
+  const KEY = 'preview.reloaded';
+  let reloaded = false;
+  try {
+    reloaded = sessionStorage.getItem(KEY) === '1';
+  } catch {
+    /* 무시 */
+  }
+  navigator.serviceWorker
+    .register('preview-sw.js', { scope: './' })
+    .then((reg) => {
+      if (!wrongShell || reloaded) return;
+      const again = () => {
+        try {
+          sessionStorage.setItem(KEY, '1');
+        } catch {
+          /* 무시 */
+        }
+        location.reload();
+      };
+      const mine = () => navigator.serviceWorker.controller && navigator.serviceWorker.controller.scriptURL.endsWith('/preview-sw.js');
+      if (mine()) return again();
+      navigator.serviceWorker.addEventListener('controllerchange', () => mine() && again());
+      if (reg.active) reg.active.postMessage({ type: 'CLAIM' });
+    })
+    .catch((e) => console.warn('미리 보기 서비스 워커 등록 실패', e));
+}
+
+export function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  if (PREVIEW) return registerPreviewSW();
+  const host = location.hostname;
+  const isLocal = host === 'localhost' || host === '127.0.0.1';
+  let forced = false;
+  try {
+    forced = localStorage.getItem(ns('hoedok.sw')) === '1';
+  } catch {
+    /* 무시 */
+  }
+  // 개발 중(localhost)에는 고친 파일이 바로 보이도록 켜지 않는다 (hoedok.sw=1이면 켬)
+  if (isLocal && !forced) return;
+  let refreshing = false;
+  // 처음 설치될 때는 새로 고치지 않는다 (이미 최신 파일로 떠 있으므로). 새 버전으로 바뀔 때만.
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing || !hadController) return;
+    refreshing = true;
+    location.reload();
+  });
+  navigator.serviceWorker
+    .register('sw.js')
+    .then((reg) => {
+      const offer = (w) => toast('새 버전이 준비됐어요', () => w.postMessage({ type: 'SKIP_WAITING' }), '새로 고침', 20000);
+      if (reg.waiting && navigator.serviceWorker.controller) offer(reg.waiting);
+      reg.addEventListener('updatefound', () => {
+        const w = reg.installing;
+        if (!w) return;
+        w.addEventListener('statechange', () => {
+          if (w.state === 'installed' && navigator.serviceWorker.controller) offer(w);
+        });
+      });
+      // 앱을 다시 열 때마다 새 버전 확인
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reg.update().catch(() => {});
+      });
+    })
+    .catch((e) => console.warn('서비스 워커 등록 실패', e));
+}
