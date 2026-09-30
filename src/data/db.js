@@ -4,11 +4,12 @@
 // - 삭제는 톰스톤(deleted: true)으로 남겨 다른 기기에 전파한다.
 
 import { openDB, reqP, txDone } from './idb.js';
+import { ns } from '../env.js';
 
 // 과목(교재·단계 포함) / 할 일 / 지난 시험 / 학기(과목 성적 포함) / 설정 한 건(main) / 사진 정보 / 반복 규칙
 export const TABLES = ['subjects', 'tasks', 'exams', 'semesters', 'meta', 'attachments', 'repeats'];
 
-const DB_NAME = 'hoedok-planner';
+const DB_NAME = ns('hoedok-planner'); // 미리 보기는 'preview.hoedok-planner' (src/env.js)
 // 2: 반복 규칙(repeats) 표 추가
 const DB_VERSION = 2;
 
@@ -53,7 +54,7 @@ export async function initDB() {
   if (from > 0 && from < DB_VERSION) await kvSet('sync:lastFull', 0);
   await loadAll();
   if (typeof BroadcastChannel !== 'undefined') {
-    bc = new BroadcastChannel('study-planner-db');
+    bc = new BroadcastChannel(ns('study-planner-db'));
     bc.onmessage = (e) => onBroadcast(e.data);
   }
   try {

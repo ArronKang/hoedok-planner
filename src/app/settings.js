@@ -5,6 +5,7 @@ import * as C from './core.js';
 import { Icon, Sheet, Seg, Switch, Stepper, hue } from './kit.js';
 import { AccountPage, syncSmall } from './account.js';
 import * as M from './motion.js';
+import { ns } from '../env.js';
 
 const { D, PR, UI, setPrefs, openSheet, closeSheet, commit, toast, minutes, WD } = C;
 
@@ -45,7 +46,7 @@ function exportFile() {
 }
 
 // 마지막으로 파일로 내보낸 날 (이 기기에서)
-const LAST_EXPORT = 'hoedok.lastExport';
+const LAST_EXPORT = ns('hoedok.lastExport');
 function lastExport() {
   try {
     return localStorage.getItem(LAST_EXPORT);

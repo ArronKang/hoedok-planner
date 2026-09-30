@@ -5,8 +5,9 @@
 // - 화면 설정(디자인·글자 등)은 이 기기의 localStorage에만 둔다.
 import * as db from '../data/db.js';
 import * as C from './core.js';
+import { ns } from '../env.js';
 
-const DEVICE_KEY = 'hoedok.device.v1';
+const DEVICE_KEY = ns('hoedok.device.v1');
 /** 자료 안의 목록 → 저장소 표 이름 */
 const TABLE = { subjects: 'subjects', tasks: 'tasks', pastExams: 'exams', semesters: 'semesters', repeats: 'repeats' };
 const KEYS = Object.keys(TABLE);

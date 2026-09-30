@@ -6,6 +6,7 @@ import * as C from './core.js';
 import { syncState } from '../sync/state.js';
 import * as S from '../sync/sync.js';
 import { getSyncSettings } from '../sync/settings.js';
+import { PREVIEW } from '../env.js';
 
 function ago(ts) {
   const s = Math.round((Date.now() - ts) / 1000);
@@ -26,6 +27,7 @@ function statusText(s) {
 
 /** 설정 첫 화면 '계정 · 동기화' 줄의 작은 글씨 */
 export function syncSmall() {
+  if (PREVIEW) return '미리 보기에서는 쓰지 않아요';
   const s = syncState.get();
   if (!s.user) return '지금은 이 기기에만 저장 · 로그인하면 휴대폰과 태블릿이 같은 기록을 써요';
   return `${s.user.email} · ${statusText(s)}`;
@@ -34,6 +36,8 @@ export function syncSmall() {
 const hasLocalData = () => C.D().onboarded || C.D().tasks.length > 0 || C.D().subjects.length > 0;
 
 export function AccountPage() {
+  // 미리 보기는 실제 계정 기록을 건드리지 않도록 로그인 자체를 막는다 (PREVIEW는 바뀌지 않으므로 훅 순서도 그대로)
+  if (PREVIEW) return html`<div><p class="sub" style="margin:0">미리 보기에서는 로그인과 동기화를 쓰지 않아요. 여기서 넣고 바꾼 것은 이 미리 보기에만 저장되고, 실제 앱의 기록과 섞이지 않아요.</p></div>`;
   const s = useStore(syncState);
   const [editServer, setEditServer] = useState(false);
   const [busy, setBusy] = useState(false);

@@ -7,6 +7,7 @@ import { initStore, isStorageOk } from './store.js';
 import { gcPhotos } from './photos.js';
 import { registerSW } from './pwa.js';
 import { initSync } from '../sync/sync.js';
+import { PREVIEW, ns, previewLabel } from '../env.js';
 import { syncState } from '../sync/state.js';
 import { Icon, Toast, hue, StageBar, useFade } from './kit.js';
 import { TodayScreen, TodayMenu, TaskSheet, AddSheet, EndDaySheet, CalendarSheet, WeekSheet, PlanSheet, PhotoSheet, DueSheet, RepeatsSheet } from './today.js';
@@ -176,7 +177,8 @@ function App() {
   const Sh = sh && SHEETS[sh.type];
   const sk = Sh ? sheetKey(sh) : null;
   const [sheetLayer, toastLayer] = useExits(sk, ui.toast ? ui.toast.id : null);
-  return html`<div class=${`device ${dev} fullscreen`} data-theme=${p.theme} data-mode=${dark ? 'dark' : 'light'} data-size=${p.size} data-density=${p.density} data-hand=${p.hand} data-motion=${M.level()} id="device">
+  return html`<div class=${`device ${dev} fullscreen${PREVIEW ? ' preview' : ''}`} data-theme=${p.theme} data-mode=${dark ? 'dark' : 'light'} data-size=${p.size} data-density=${p.density} data-hand=${p.hand} data-motion=${M.level()} id="device">
+    ${PREVIEW ? html`<div class="preview-bar" role="note"><b>미리 보기</b>${previewLabel() ? ` · ${previewLabel()}` : ''}<span> · 실제 앱과 따로 저장돼요</span></div>` : null}
     <${StorageNote} />
     ${err ? html`<${Crash} err=${err} reset=${reset} />` : !s.data.onboarded ? html`<${Onboarding} />` : dev === 'pad' ? html`<${Pad} />` : html`<${Phone} />`}
     <div class="sheet-layer" ref=${sheetLayer}>${Sh ? html`<${Sh} key=${sk} ...${sh} />` : null}</div>
@@ -237,7 +239,7 @@ function syncChrome() {
   const m = document.querySelector('meta[name="theme-color"]');
   if (m) m.setAttribute('content', bg);
   try {
-    localStorage.setItem('hoedok.bg', bg); // 다음 실행 첫 화면 색
+    localStorage.setItem(ns('hoedok.bg'), bg); // 다음 실행 첫 화면 색
   } catch {
     /* 무시 */
   }
@@ -273,7 +275,8 @@ async function boot() {
     else C.setUI({});
   });
   setTimeout(() => gcPhotos(D().tasks).catch(() => {}), 4000);
-  if (isStorageOk()) {
+  // 미리 보기는 동기화하지 않는다 (실제 계정 기록을 건드리지 않게)
+  if (isStorageOk() && !PREVIEW) {
     initSync().catch((e) => console.warn('동기화 시작 실패', e));
     // 설정이 열려 있으면 동기화 상태 글씨를 새로 그린다
     syncState.subscribe(() => C.UI().sheet && C.UI().sheet.type === 'settings' && C.setUI({}));
