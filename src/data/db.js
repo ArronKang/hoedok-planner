@@ -5,11 +5,12 @@
 
 import { openDB, reqP, txDone } from './idb.js';
 
-// 과목(교재·단계 포함) / 할 일 / 지난 시험 / 학기(과목 성적 포함) / 설정 한 건(main) / 사진 정보
-export const TABLES = ['subjects', 'tasks', 'exams', 'semesters', 'meta', 'attachments'];
+// 과목(교재·단계 포함) / 할 일 / 지난 시험 / 학기(과목 성적 포함) / 설정 한 건(main) / 사진 정보 / 반복 규칙
+export const TABLES = ['subjects', 'tasks', 'exams', 'semesters', 'meta', 'attachments', 'repeats'];
 
 const DB_NAME = 'hoedok-planner';
-const DB_VERSION = 1;
+// 2: 반복 규칙(repeats) 표 추가
+const DB_VERSION = 2;
 
 let idb = null;
 const mem = {};
@@ -36,7 +37,9 @@ export function isReady() {
 }
 
 export async function initDB() {
-  idb = await openDB(DB_NAME, DB_VERSION, (db) => {
+  let from = 0;
+  idb = await openDB(DB_NAME, DB_VERSION, (db, oldVersion) => {
+    from = oldVersion;
     for (const t of TABLES) if (!db.objectStoreNames.contains(t)) db.createObjectStore(t, { keyPath: 'id' });
     if (!db.objectStoreNames.contains('outbox')) db.createObjectStore('outbox', { keyPath: 'k' });
     if (!db.objectStoreNames.contains('kv')) db.createObjectStore('kv');
@@ -46,6 +49,8 @@ export async function initDB() {
     idb.close();
     location.reload();
   };
+  // 옛 버전은 모르는 표의 기록을 받고도 버리고 지나갔다 → 다음 동기화는 처음부터 다시 받는다
+  if (from > 0 && from < DB_VERSION) await kvSet('sync:lastFull', 0);
   await loadAll();
   if (typeof BroadcastChannel !== 'undefined') {
     bc = new BroadcastChannel('study-planner-db');
@@ -138,8 +143,15 @@ async function flushWrites() {
   if (!batch.size && !dels.size) return;
   try {
     const tx = idb.transaction([...TABLES, 'outbox'], 'readwrite');
-    for (const { t, rec, ob } of batch.values()) {
-      tx.objectStore(t).put(rec);
+    for (const { t, rec, ob, weak } of batch.values()) {
+      const os = tx.objectStore(t);
+      if (weak) {
+        // 저절로 만든 레코드: 같은 기기의 다른 탭이 이미 써 둔 것(체크한 기록 등)이 있으면 그대로 둔다
+        const g = os.get(rec.id);
+        g.onsuccess = () => {
+          if (!g.result) os.put(rec);
+        };
+      } else os.put(rec);
       if (ob) tx.objectStore('outbox').put({ k: `${t}/${rec.id}`, t, id: rec.id, updatedAt: rec.updatedAt });
     }
     for (const k of dels) if (!batch.has(k) || !batch.get(k).ob) tx.objectStore('outbox').delete(k);
@@ -192,21 +204,25 @@ export function subscribe(fn) {
   return () => subs.delete(fn);
 }
 
-/** 레코드 저장(추가/교체). updatedAt은 항상 증가한다. */
-export function put(t, rec) {
+/**
+ * 레코드 저장(추가/교체). updatedAt은 항상 증가한다.
+ * weak: 앱이 저절로 만든 새 레코드(반복 할 일). 가장 오래된 시각(1)으로 저장해서
+ * 다른 기기에서 사람이 고친 같은 레코드를 절대 덮어쓰지 않게 한다.
+ */
+export function put(t, rec, { weak = false } = {}) {
   if (!mem[t]) throw new Error('unknown table ' + t);
   if (!rec || !rec.id) throw new Error('record without id');
   const key = `${t}/${rec.id}`;
   const prev = mem[t].get(rec.id);
   if (capture && !capture.has(key)) capture.set(key, { t, id: rec.id, before: prev });
   const now = Date.now();
-  const updatedAt = Math.max(now, prev ? (prev.updatedAt || 0) + 1 : 0);
+  const updatedAt = weak && !prev ? 1 : Math.max(now, prev ? (prev.updatedAt || 0) + 1 : 0);
   const next = { ...rec, updatedAt };
   next.createdAt = rec.createdAt || (prev && prev.createdAt) || now;
   if (!next.deleted) delete next.deleted;
   mem[t].set(rec.id, next);
   outbox.set(key, updatedAt);
-  pending.set(key, { t, rec: next, ob: true });
+  pending.set(key, { t, rec: next, ob: true, weak: weak && !prev });
   scheduleWrite();
   touch(t);
   return next;

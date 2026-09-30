@@ -728,3 +728,12 @@ h3.q { margin: 0 0 12px; font-size: 1.2em; letter-spacing: var(--ls); }
 .device .daylist .task + .task::before { content: ''; position: absolute; z-index: 1; top: 0; left: 50px; right: 0; border-top: 1px solid var(--line); pointer-events: none; }
 /* 휴대폰 시트 손잡이 줄: 끌어내리기 */
 .device.phone .sheet-h { touch-action: none; cursor: grab; }
+
+/* ═══════════ 기능 추가 2차: 반복·마감·기간 ═══════════ */
+.cal .ex.due { color: var(--accent); }
+.due-facts { display: flex; flex-wrap: wrap; gap: 2px 14px; margin-top: 6px; font-size: max(13px, .88em); color: var(--ink-2); }
+.due-facts b { font-weight: 650; color: var(--ink); }
+.set-row button.l.plain { background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; min-height: 44px; }
+.set-row button.l.plain:disabled { cursor: default; }
+/* 시험 준비 전체처럼 날이 많을 때: 막대 사이를 좁게 */
+.vbars.many { gap: 1px; }

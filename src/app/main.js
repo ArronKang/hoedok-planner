@@ -8,7 +8,7 @@ import { registerSW } from './pwa.js';
 import { initSync } from '../sync/sync.js';
 import { syncState } from '../sync/state.js';
 import { Icon, Toast, hue, StageBar } from './kit.js';
-import { TodayScreen, TodayMenu, TaskSheet, AddSheet, EndDaySheet, CalendarSheet, WeekSheet, PlanSheet, PhotoSheet } from './today.js';
+import { TodayScreen, TodayMenu, TaskSheet, AddSheet, EndDaySheet, CalendarSheet, WeekSheet, PlanSheet, PhotoSheet, DueSheet, RepeatsSheet } from './today.js';
 import { ProgressList, SubjectPage, RecordSheet, SubjectMenu, ProgressMenu, ColorSheet, SetupSheet, RoutineSheet, EditSheet, AddSubjectSheet } from './progress.js';
 import { GradesHome, ExamReport, SemesterPage, NaesinPage, GradesMenu, MockEntrySheet, WrongSheet, WrongStatsSheet, GradeSetupSheet, NaesinTrendSheet } from './grades.js';
 import { CycleSheet } from './cycle.js';
@@ -18,7 +18,7 @@ import { Onboarding } from './onboarding.js';
 const { store, D, UI, PR } = C;
 
 const SHEETS = {
-  task: TaskSheet, add: AddSheet, endday: EndDaySheet, calendar: CalendarSheet, week: WeekSheet, plan: PlanSheet, todayMenu: TodayMenu,
+  task: TaskSheet, add: AddSheet, endday: EndDaySheet, calendar: CalendarSheet, week: WeekSheet, plan: PlanSheet, todayMenu: TodayMenu, due: DueSheet, repeats: RepeatsSheet,
   record: RecordSheet, subjectMenu: SubjectMenu, progressMenu: ProgressMenu, color: ColorSheet, setup: SetupSheet, routine: RoutineSheet, edit: EditSheet, addSubject: AddSubjectSheet,
   gradesMenu: GradesMenu, mockEntry: MockEntrySheet, wrong: WrongSheet, wrongStats: WrongStatsSheet, gradeSetup: GradeSetupSheet, naesinTrend: NaesinTrendSheet,
   cycle: CycleSheet, settings: SettingsSheet, photo: PhotoSheet, backup: BackupSheet,
@@ -191,6 +191,7 @@ async function boot() {
     if (d !== C.UI().dev) C.setUI({ dev: d });
   });
   await initStore();
+  if (C.fillRepeats()) C.commit(); // 반복하는 일: 오늘부터 2주 앞까지
   const root = document.getElementById('app');
   root.textContent = '';
   render(html`<${App} />`, root);
@@ -201,8 +202,12 @@ async function boot() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && C.UI().sheet) C.closeSheet();
   });
-  // 날짜가 바뀐 채로 앱을 다시 열면 '오늘'을 새로 계산해 그린다
-  document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && C.setUI({}));
+  // 날짜가 바뀐 채로 앱을 다시 열면 '오늘'을 새로 계산해 그리고, 반복하는 일도 2주 앞까지 채운다
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible') return;
+    if (C.fillRepeats()) C.commit();
+    else C.setUI({});
+  });
   setTimeout(() => gcPhotos(D().tasks).catch(() => {}), 4000);
   if (isStorageOk()) {
     initSync().catch((e) => console.warn('동기화 시작 실패', e));

@@ -35,7 +35,22 @@ function exportFile() {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 4000);
+  try {
+    localStorage.setItem(LAST_EXPORT, C.today());
+  } catch {
+    /* 저장 공간이 막힌 환경 */
+  }
   toast('파일로 내보냈어요');
+}
+
+// 마지막으로 파일로 내보낸 날 (이 기기에서)
+const LAST_EXPORT = 'hoedok.lastExport';
+function lastExport() {
+  try {
+    return localStorage.getItem(LAST_EXPORT);
+  } catch {
+    return null;
+  }
 }
 
 async function pickBackup(e) {
@@ -93,7 +108,7 @@ function Root({ nav }) {
     <//>
 
     <${Group} title="자료">
-      <${Row} label="파일로 내보내기" small="모든 공부 기록을 파일 하나로. 사진은 빠져요" onClick=${exportFile} />
+      <${Row} label="파일로 내보내기" small=${`모든 공부 기록을 파일 하나로. 사진은 빠져요 · ${lastExport() ? `마지막 ${C.mdws(lastExport())}` : '이 기기에서 아직 안 함'}`} onClick=${exportFile} />
       <label class="set-row" style="cursor:pointer">
         <span class="l"><b>파일에서 불러오기</b><small>내보낸 파일로 지금 기록을 바꿔요</small></span><${Icon} n="right" s=${18} />
         <input type="file" accept="application/json,.json" style="display:none" onChange=${pickBackup} />
@@ -147,6 +162,7 @@ function ViewsPage() {
       <${Row} label="시험 D-day"><${Switch} label="시험 D-day" on=${p.show.dday} onChange=${() => toggleShow('dday')} /><//>
       <${Row} label="오늘 요약 막대" small="몇 개, 몇 쪽 했는지"><${Switch} label="오늘 요약" on=${p.show.summary} onChange=${() => toggleShow('summary')} /><//>
       <${Row} label="지난 날 못 끝낸 일 알림"><${Switch} label="못 끝낸 일 알림" on=${p.show.overdue} onChange=${() => toggleShow('overdue')} /><//>
+      <${Row} label="다가오는 마감 알림" small=${`마감이 ${C.DUE_SOON}일 안인데 다른 날로 잡아 둔 일`}><${Switch} label="다가오는 마감 알림" on=${p.show.due !== false} onChange=${() => setPrefs({ show: { ...p.show, due: p.show.due === false } })} /><//>
       <${Row} label="끝낸 일은 아래로"><${Switch} label="끝낸 일은 아래로" on=${p.doneBottom} onChange=${(v) => setPrefs({ doneBottom: v })} /><//>
     <//>
 
