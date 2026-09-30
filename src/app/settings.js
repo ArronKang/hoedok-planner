@@ -4,6 +4,7 @@ import { useState } from '../lib/ui.js';
 import * as C from './core.js';
 import { Icon, Sheet, Seg, Switch, Stepper, hue } from './kit.js';
 import { AccountPage, syncSmall } from './account.js';
+import * as M from './motion.js';
 
 const { D, PR, UI, setPrefs, openSheet, closeSheet, commit, toast, minutes, WD } = C;
 
@@ -13,9 +14,9 @@ const THEMES = [
   { id: 'soft', name: '부드러움', desc: '넉넉한 여백, 둥근 모서리', sw: ['#f1f2f5', '#ffffff', '#3d5afe', '#e85d22'] },
 ];
 
-function Row({ label, small, children, onClick }) {
+function Row({ label, small, children, onClick, danger }) {
   const Tag = onClick ? 'button' : 'div';
-  return html`<${Tag} class="set-row" onClick=${onClick}>
+  return html`<${Tag} class=${'set-row' + (danger ? ' danger' : '')} onClick=${onClick}>
     <span class="l"><b>${label}</b>${small ? html`<small>${small}</small>` : null}</span>
     ${children}${onClick ? html`<${Icon} n="right" s=${18} />` : null}
   <//>`;
@@ -85,6 +86,7 @@ export function BackupSheet({ info }) {
 
 const MODE_LABEL = { auto: '기기 따라', light: '밝게', dark: '어둡게' };
 const SIZE_LABEL = { sm: '작게', md: '보통', lg: '크게', xl: '아주 크게' };
+const MOTION_LABEL = Object.fromEntries(M.LEVELS);
 
 /** 설정 첫 화면: 자주 쓰는 것부터. 화면 꾸미기는 한 단계 안으로 */
 function Root({ nav }) {
@@ -103,17 +105,18 @@ function Root({ nav }) {
     <//>
 
     <${Group} title="화면">
-      <${Row} label="디자인 · 글자" small=${`${theme.name} · ${MODE_LABEL[p.mode]} · 글자 ${SIZE_LABEL[p.size]}`} onClick=${() => nav('display')} />
+      <${Row} label="디자인 · 글자 · 움직임" small=${`${theme.name} · ${MODE_LABEL[p.mode]} · 글자 ${SIZE_LABEL[p.size]} · 움직임 ${MOTION_LABEL[M.level()]}`} onClick=${() => nav('display')} />
       <${Row} label="보일 것 고르기" small="오늘·진도 화면에 무엇을 보일지" onClick=${() => nav('views')} />
     <//>
 
     <${Group} title="자료">
-      <${Row} label="파일로 내보내기" small=${`모든 공부 기록을 파일 하나로. 사진은 빠져요 · ${lastExport() ? `마지막 ${C.mdws(lastExport())}` : '이 기기에서 아직 안 함'}`} onClick=${exportFile} />
+      <${Row} label="파일로 내보내기" small=${`기록을 파일 하나로 · ${lastExport() ? `마지막 ${C.mdws(lastExport())}` : '아직 안 함'}`} onClick=${exportFile} />
       <label class="set-row" style="cursor:pointer">
         <span class="l"><b>파일에서 불러오기</b><small>내보낸 파일로 지금 기록을 바꿔요</small></span><${Icon} n="right" s=${18} />
         <input type="file" accept="application/json,.json" style="display:none" onChange=${pickBackup} />
       </label>
       <${Row}
+        danger
         label=${wipeAsk ? '한 번 더 누르면 모두 지워져요' : '모든 기록 지우고 처음부터'}
         small=${wipeAsk ? '지운 직후에는 되돌릴 수 있어요' : '과목·할 일·성적을 모두 지워요. 먼저 파일로 내보내 두면 안전해요'}
         onClick=${() => {
@@ -143,6 +146,7 @@ function DisplayPage() {
       <${Row} label="간격" small="한 화면에 보이는 양"><${Seg} label="간격" value=${p.density} onChange=${(v) => setPrefs({ density: v })} options=${[['compact', '촘촘'], ['normal', '보통'], ['relaxed', '넉넉']]} /><//>
       ${!pad ? html`<${Row} label="＋ 단추 위치" small="쥐는 손 쪽으로"><${Seg} label="단추 위치" value=${p.hand} onChange=${(v) => setPrefs({ hand: v })} options=${[['left', '왼쪽'], ['right', '오른쪽']]} /><//>` : null}
     <//>
+    <${MotionGroup} />
     ${pad
       ? html`<${Group} title="태블릿 화면">
           <${Row} label="오늘 옆에 보일 것"><${Seg} label="오늘 옆" value=${p.padAside} onChange=${(v) => setPrefs({ padAside: v })} options=${[['progress', '진도'], ['calendar', '달력'], ['none', '없음']]} /><//>
@@ -151,6 +155,28 @@ function DisplayPage() {
       : null}
     <p class="hint" style="text-align:center">화면 설정은 이 기기에만 저장돼요. 다른 기기는 따로 정해요.</p>
   </div>`;
+}
+
+/** 움직임: 속도 하나 + 화면 옮길 때 하나. 고르는 순간 아래 알림이 그 속도로 떠서 바로 느껴 볼 수 있다 */
+function MotionGroup() {
+  const p = PR();
+  const lv = M.level();
+  const pick = (v) => {
+    setPrefs({ motion: v });
+    toast(v === 'off' ? '움직임을 껐어요' : `움직임: ${MOTION_LABEL[v]}`);
+  };
+  return html`<${Group} title="움직임">
+    <div class="set-row col">
+      <span class="l"><b>움직이는 속도</b><small>창이 열리고 닫힐 때, 체크할 때 부드럽게 바뀌어요</small></span>
+      <${Seg} label="움직이는 속도" value=${lv} onChange=${pick} options=${M.LEVELS} />
+      ${p.motion == null && M.osReduce() ? html`<small class="muted">기기에서 '동작 줄이기'를 켜 두어서 꺼 두었어요. 여기서 고르면 그대로 따라요.</small>` : null}
+    </div>
+    ${lv !== 'off'
+      ? html`<${Row} label="화면을 옮길 때도 부드럽게" small="탭을 옮기거나 과목·날짜를 바꿀 때">
+          <${Switch} label="화면을 옮길 때도 부드럽게" on=${p.motionView !== false} onChange=${(v) => setPrefs({ motionView: v })} />
+        <//>`
+      : null}
+  <//>`;
 }
 
 /** 오늘·진도 화면에 보일 것 */
@@ -278,7 +304,7 @@ const PAGES = {
   exam: ['시험', ExamPage],
   subjects: ['과목', SubjectsPage],
   account: ['계정 · 동기화', AccountPage],
-  display: ['디자인 · 글자', DisplayPage],
+  display: ['디자인 · 글자 · 움직임', DisplayPage],
   views: ['보일 것 고르기', ViewsPage],
 };
 
@@ -286,7 +312,9 @@ export function SettingsSheet({ page }) {
   const [cur, setCur] = useState(page || null);
   const P = cur && PAGES[cur];
   return html`<${Sheet} title=${P ? P[0] : '설정'} tall>
-    ${P ? html`<button class="back" onClick=${() => setCur(null)}><${Icon} n="left" s=${20} />설정</button>` : null}
-    ${P ? html`<${P[1]} />` : html`<${Root} nav=${setCur} />`}
+    <div class="appear" key=${cur || 'root'}>
+      ${P ? html`<button class="back" onClick=${() => setCur(null)}><${Icon} n="left" s=${20} />설정</button>` : null}
+      ${P ? html`<${P[1]} />` : html`<${Root} nav=${setCur} />`}
+    </div>
   <//>`;
 }

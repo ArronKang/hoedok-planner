@@ -1,13 +1,14 @@
 // 앱 틀: 휴대폰(한 화면 + 아래 탭) / 태블릿·PC(왼쪽 막대 + 두 칸)
 import { html } from '../lib/html.js';
-import { render, useStore, useErrorBoundary } from '../lib/ui.js';
+import { render, useStore, useErrorBoundary, useRef, useLayoutEffect } from '../lib/ui.js';
 import * as C from './core.js';
+import * as M from './motion.js';
 import { initStore, isStorageOk } from './store.js';
 import { gcPhotos } from './photos.js';
 import { registerSW } from './pwa.js';
 import { initSync } from '../sync/sync.js';
 import { syncState } from '../sync/state.js';
-import { Icon, Toast, hue, StageBar } from './kit.js';
+import { Icon, Toast, hue, StageBar, useFade } from './kit.js';
 import { TodayScreen, TodayMenu, TaskSheet, AddSheet, EndDaySheet, CalendarSheet, WeekSheet, PlanSheet, PhotoSheet, DueSheet, RepeatsSheet } from './today.js';
 import { ProgressList, SubjectPage, RecordSheet, SubjectMenu, ProgressMenu, ColorSheet, SetupSheet, RoutineSheet, EditSheet, AddSubjectSheet } from './progress.js';
 import { GradesHome, ExamReport, SemesterPage, NaesinPage, GradesMenu, MockEntrySheet, WrongSheet, WrongStatsSheet, GradeSetupSheet, NaesinTrendSheet } from './grades.js';
@@ -50,17 +51,22 @@ function ProgressAside() {
   </div>`;
 }
 
+/** 지금 보고 있는 화면을 가리키는 글자 (바뀌면 새 화면이 부드럽게 나타난다) */
+const entryKey = (e) => (e ? `${e.view}:${e.id || ''}:${e.sem || ''}:${e.rec || ''}` : '');
+
 function Phone() {
   const ui = UI();
   const tab = ui.tab;
   const t = C.top(tab);
   const back = () => C.pop(tab);
+  const view = useRef(null);
+  useFade(view, `${tab}|${entryKey(t)}|${tab === 'today' ? C.viewDay() : ''}`);
   let main;
   if (tab === 'today') main = html`<${TodayScreen} />`;
   else if (tab === 'progress') main = t ? html`<${SubjectPage} key=${t.id} id=${t.id} back=${back} />` : html`<${ProgressList} />`;
   else main = t ? gradeDetail(t, back) : html`<${GradesHome} />`;
   return html`<div style="display:contents">
-    ${main}
+    <div class="view" ref=${view}>${main}</div>
     <nav class="tabbar" aria-label="주요 화면">
       ${TABS.map(([id, label, icon]) => html`<button key=${id} aria-current=${tab === id ? 'page' : 'false'} onClick=${() => {
         if (tab === id && ui.stacks[id].length) C.setUI({ stacks: { ...ui.stacks, [id]: [] } });
@@ -76,17 +82,30 @@ function Pad() {
   const p = PR();
   const tab = ui.tab;
   const t = C.top(tab);
+  // 탭을 옮기면 오른쪽 전체가, 같은 탭에서 고른 것만 바뀌면 오른쪽 큰 칸만 부드럽게
+  const view = useRef(null);
+  const mainCol = useRef(null);
+  const last = useRef(null);
+  const detail = `${entryKey(t)}|${tab === 'today' ? C.viewDay() : ''}`;
+  useLayoutEffect(() => {
+    const prev = last.current;
+    last.current = { tab, detail };
+    if (!prev || !M.viewOn()) return;
+    const fr = [{ opacity: 0, translate: '0 6px' }, { opacity: 1, translate: '0 0' }];
+    if (prev.tab !== tab) M.play(view.current, fr, 220);
+    else if (prev.detail !== detail) M.play(mainCol.current, fr, 220);
+  }, [tab, detail]);
   let cols;
   if (tab === 'today') {
-    cols = html`<div class="col main"><${TodayScreen} /></div>
+    cols = html`<div class="col main" ref=${mainCol}><${TodayScreen} /></div>
       ${p.padAside === 'progress' ? html`<div class="col aside"><${ProgressAside} /></div>` : null}
       ${p.padAside === 'calendar' ? html`<div class="col aside"><div class="screen"><header class="head"><div class="t"><h1>달력</h1></div></header><div class="scroll"><div class="body"><${CalendarSheet} inline /></div></div></div></div>` : null}`;
   } else if (tab === 'progress') {
     const first = D().subjects.find((s) => s.stages.length) || D().subjects[0];
     const id = t ? t.id : first && first.id;
-    cols = html`<div class=${'col list w-' + p.listWidth}><${ProgressList} /></div><div class="col main">${id ? html`<${SubjectPage} key=${id} id=${id} />` : html`<div class="placeholder">과목을 넣어 주세요</div>`}</div>`;
+    cols = html`<div class=${'col list w-' + p.listWidth}><${ProgressList} /></div><div class="col main" ref=${mainCol}>${id ? html`<${SubjectPage} key=${id} id=${id} />` : html`<div class="placeholder">과목을 넣어 주세요</div>`}</div>`;
   } else {
-    cols = html`<div class=${'col list w-' + p.listWidth}><${GradesHome} /></div><div class="col main">${gradeDetail(t, ui.stacks.grades.length > 1 ? () => C.pop('grades') : null) || html`<div class="placeholder">왼쪽에서 시험이나 학기를 골라 주세요</div>`}</div>`;
+    cols = html`<div class=${'col list w-' + p.listWidth}><${GradesHome} /></div><div class="col main" ref=${mainCol}>${gradeDetail(t, ui.stacks.grades.length > 1 ? () => C.pop('grades') : null) || html`<div class="placeholder">왼쪽에서 시험이나 학기를 골라 주세요</div>`}</div>`;
   }
   return html`<div style="display:contents">
     <aside class="side" aria-label="주요 화면">
@@ -94,7 +113,7 @@ function Pad() {
       <span class="sp"></span>
       <button onClick=${() => C.openSheet({ type: 'settings' })}><${Icon} n="gear" /><span>설정</span></button>
     </aside>
-    ${cols}
+    <div class="view pad-view" ref=${view}>${cols}</div>
   </div>`;
 }
 
@@ -108,6 +127,44 @@ function StorageNote() {
   return html`<div class="storage-note" role="alert">이 브라우저에서는 기록을 저장할 수 없어요. 창을 닫으면 사라져요. (사생활 보호 모드라면 일반 창에서 열어 주세요)</div>`;
 }
 
+const sheetKey = (sh) => sh.type + (sh.id || sh.stage || '') + (sh.pickFor || '') + (sh.name || '') + (sh.rec || '');
+
+/**
+ * 창·알림이 사라지는 움직임: 다시 그리기 **직전**의 모습을 복사해 두었다가(motion.capture),
+ * 다시 그린 뒤 화면 맨 위에서 흐리게 지운다(motion.release). 실제 화면은 바로 바뀐다.
+ */
+function useExits(sheetK, toastId) {
+  const sheetLayer = useRef(null);
+  const toastLayer = useRef(null);
+  const last = useRef({ sheet: null, toast: null });
+  const out = useRef([]);
+  const prev = last.current;
+  M.setSheetSwap(false);
+  if (prev.sheet !== sheetK) {
+    const root = prev.sheet && sheetLayer.current && sheetLayer.current.firstElementChild;
+    if (root) {
+      // 창이 없어지면 배경까지, 다른 창으로 넘어가면 창만
+      const close = !sheetK;
+      const g = M.capture(close ? root : root.querySelector('.sheet'));
+      if (g) out.current.push(() => M.sheetOut(g, close));
+    }
+    M.setSheetSwap(!!(prev.sheet && sheetK));
+  }
+  if (prev.toast && prev.toast !== toastId && !toastId) {
+    const el = toastLayer.current && toastLayer.current.querySelector('.toast');
+    const g = M.capture(el);
+    if (g) out.current.push(() => M.release(g, [[null, [{ opacity: 1, translate: '0 0' }, { opacity: 0, translate: '0 8px' }]]], 160));
+  }
+  last.current = { sheet: sheetK, toast: toastId };
+  useLayoutEffect(() => {
+    const jobs = out.current;
+    out.current = [];
+    for (const j of jobs) j();
+    M.setSheetSwap(false);
+  });
+  return [sheetLayer, toastLayer];
+}
+
 function App() {
   const s = useStore(store);
   const [err, reset] = useErrorBoundary();
@@ -117,11 +174,13 @@ function App() {
   const dev = ui.dev;
   const sh = ui.sheet;
   const Sh = sh && SHEETS[sh.type];
-  return html`<div class=${`device ${dev} fullscreen`} data-theme=${p.theme} data-mode=${dark ? 'dark' : 'light'} data-size=${p.size} data-density=${p.density} data-hand=${p.hand} id="device">
+  const sk = Sh ? sheetKey(sh) : null;
+  const [sheetLayer, toastLayer] = useExits(sk, ui.toast ? ui.toast.id : null);
+  return html`<div class=${`device ${dev} fullscreen`} data-theme=${p.theme} data-mode=${dark ? 'dark' : 'light'} data-size=${p.size} data-density=${p.density} data-hand=${p.hand} data-motion=${M.level()} id="device">
     <${StorageNote} />
     ${err ? html`<${Crash} err=${err} reset=${reset} />` : !s.data.onboarded ? html`<${Onboarding} />` : dev === 'pad' ? html`<${Pad} />` : html`<${Phone} />`}
-    ${Sh ? html`<${Sh} key=${sh.type + (sh.id || sh.stage || '') + (sh.pickFor || '') + (sh.name || '') + (sh.rec || '')} ...${sh} />` : null}
-    <${Toast} t=${ui.toast} />
+    <div class="sheet-layer" ref=${sheetLayer}>${Sh ? html`<${Sh} key=${sk} ...${sh} />` : null}</div>
+    <div class="toast-layer" ref=${toastLayer}><${Toast} t=${ui.toast} /></div>
   </div>`;
 }
 
@@ -195,6 +254,11 @@ async function boot() {
   const root = document.getElementById('app');
   root.textContent = '';
   render(html`<${App} />`, root);
+  M.play(document.getElementById('device'), [{ opacity: 0 }, { opacity: 1 }], 200);
+  // 아이폰 Safari는 터치 신호를 받는 곳이 있어야 눌림 표시(:active)를 보여 준다
+  document.addEventListener('touchstart', () => {}, { passive: true });
+  // 기기의 '동작 줄이기'를 바꾸면 바로 반영 (사용자가 직접 고른 적 없을 때)
+  M.onOsChange(() => C.setUI({}));
   store.subscribe(() => requestAnimationFrame(syncChrome));
   initBack();
   requestAnimationFrame(syncChrome);

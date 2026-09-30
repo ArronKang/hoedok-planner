@@ -1,7 +1,23 @@
 // 공통 조각
 import { html } from '../lib/html.js';
-import { useRef, useState } from '../lib/ui.js';
+import { useRef, useState, useLayoutEffect } from '../lib/ui.js';
 import { pages, done, status, curStage, P, closeSheet, UI, unitOf } from './core.js';
+import * as M from './motion.js';
+
+/**
+ * key가 바뀔 때마다 ref의 요소를 부드럽게 나타낸다 (처음 그릴 때는 가만히).
+ * 화면 옮기기(탭·과목·날짜)에 쓴다 — 설정의 '화면을 옮길 때도 부드럽게'를 따른다.
+ */
+export function useFade(ref, key, on = M.viewOn) {
+  const first = useRef(true);
+  useLayoutEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (on()) M.play(ref.current, [{ opacity: 0, translate: '0 6px' }, { opacity: 1, translate: '0 0' }], 220);
+  }, [key]);
+}
 
 const PATHS = {
   today: 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4',
@@ -26,6 +42,18 @@ export const hue = (h) => ({ '--h': h });
 
 /** 체크 동그라미. 일부만 한 경우 조각으로 채운다 */
 export function Check({ state, frac = 0, onClick, label }) {
+  const svg = useRef(null);
+  const first = useRef(true);
+  // 방금 끝낸 것만 채워지는 움직임 (탭을 옮겨 와서 처음 그릴 때는 가만히 → 한꺼번에 움직이지 않음)
+  useLayoutEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (state !== 'done' || !svg.current) return;
+    M.play(svg.current.querySelector('.fill'), [{ opacity: 0, transform: 'scale(.55)' }, { opacity: 1, transform: 'scale(1)' }], 240);
+    M.play(svg.current.querySelector('.tick'), [{ strokeDasharray: '16', strokeDashoffset: '16' }, { strokeDasharray: '16', strokeDashoffset: '0' }], 320);
+  }, [state]);
   let inner = null;
   if (state === 'done') inner = html`<circle cx="13" cy="13" r="11" class="fill" /><path class="tick" d="M8 13.5l3.2 3.2L18 9.5" />`;
   else if (frac > 0) {
@@ -34,7 +62,7 @@ export function Check({ state, frac = 0, onClick, label }) {
     inner = html`<path class="fill" d=${`M13 13L13 2A11 11 0 ${frac > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}Z`} />`;
   }
   return html`<button class="check" aria-label=${label} aria-pressed=${state === 'done' ? 'true' : 'false'} onClick=${(e) => { e.stopPropagation(); onClick(); }}>
-    <svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="11" class="ring" />${inner}</svg>
+    <svg viewBox="0 0 26 26" ref=${svg}><circle cx="13" cy="13" r="11" class="ring" />${inner}</svg>
   </button>`;
 }
 
@@ -82,10 +110,14 @@ export function Stepper({ value, step = 30, min = 0, max = 960, fmtv, onChange, 
 }
 
 /** 시트 틀 */
-export function Sheet({ title, children, footer, tall, wide, onClose }) {
+/** 창 틀. step: 한 창 안에서 단계가 바뀌는 경우(시험 정리 등) 바뀔 때마다 내용이 부드럽게 나타난다 */
+export function Sheet({ title, children, footer, tall, wide, onClose, step }) {
   const close = onClose || closeSheet;
   const box = useRef(null);
+  const veil = useRef(null);
   const drag = useRef(null);
+  // 처음 열릴 때 한 번: 배경은 서서히 어두워지고 창은 살짝 올라오며 (창에서 창으로 넘어갈 때는 가만히)
+  useLayoutEffect(() => M.sheetIn(veil.current, box.current), []);
   // 휴대폰: 위쪽 손잡이 줄을 끌어내리면 닫힌다 (손가락을 따라 움직이기만 하고 효과는 없음)
   const down = (e) => {
     if (UI().dev !== 'phone' || e.target.closest('button')) return;
@@ -102,14 +134,21 @@ export function Sheet({ title, children, footer, tall, wide, onClose }) {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
-    if (box.current) box.current.style.transform = '';
-    if (d.dy > 90) close();
+    // 닫을 때는 끌어내린 자리 그대로 두어야 사라지는 모습이 그 자리에서 이어진다
+    if (d.dy > 90) {
+      if (!M.on() && box.current) box.current.style.transform = '';
+      return close();
+    }
+    if (box.current) {
+      box.current.style.transform = '';
+      if (d.dy > 2) M.play(box.current, [{ transform: `translateY(${d.dy}px)` }, { transform: 'none' }], 200);
+    }
   };
   return html`<div>
-    <div class="veil" onClick=${close}></div>
+    <div class="veil" ref=${veil} onClick=${close}></div>
     <div class=${'sheet' + (tall ? ' tall' : '') + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label=${title} ref=${box}>
       <div class="sheet-h" onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}><span class="grab"></span><h2 class="ell">${title}</h2><button class="ib" aria-label="닫기" onClick=${close}><${Icon} n="x" /></button></div>
-      <div class="sheet-b">${children}</div>
+      <div class="sheet-b">${step ? html`<div class="appear" key=${step}>${children}</div>` : children}</div>
       ${footer ? html`<div class="sheet-f">${footer}</div>` : null}
     </div>
   </div>`;
@@ -152,7 +191,7 @@ export function Swipe({ children, onRight, onLeft, cls, style }) {
     else if (s.dx < -th) onLeft();
   };
   return html`<div
-    class=${cls}
+    class=${cls + (dx ? ' dragging' : '')}
     style=${style}
     ref=${ref}
     onPointerDown=${down}
@@ -167,13 +206,20 @@ export function Swipe({ children, onRight, onLeft, cls, style }) {
     }}
   >
     ${dx > 0 ? html`<div class="task-bg r">완료</div>` : dx < 0 ? html`<div class="task-bg l">내일로</div>` : null}
-    <div style=${{ transform: dx ? `translateX(${dx}px)` : '' }}>${children}</div>
+    <div class="sw-in" style=${{ transform: dx ? `translateX(${dx}px)` : '' }}>${children}</div>
   </div>`;
 }
 
 export function Toast({ t }) {
+  const el = useRef(null);
+  // 새 알림이 뜰 때마다 한 번 (같은 알림이 다시 그려질 때는 가만히)
+  useLayoutEffect(() => {
+    if (!t) return;
+    M.clearGhosts('.toast'); // 사라지던 알림이 남아 두 개가 겹쳐 보이지 않게
+    M.play(el.current, [{ opacity: 0, translate: '0 10px' }, { opacity: 1, translate: '0 0' }], 200);
+  }, [t && t.id]);
   if (!t) return null;
-  return html`<div class="toast" role="status"><span class="m">${t.msg}</span>${t.undo ? html`<button onClick=${t.undo}>${t.label || '되돌리기'}</button>` : null}</div>`;
+  return html`<div class="toast" role="status" ref=${el}><span class="m">${t.msg}</span>${t.undo ? html`<button onClick=${t.undo}>${t.label || '되돌리기'}</button>` : null}</div>`;
 }
 
 export const isPad = () => UI().dev === 'pad';

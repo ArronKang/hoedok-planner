@@ -161,7 +161,7 @@ export function ExamReport({ id, back }) {
       </div>
 
       <button class="more-toggle" onClick=${() => C.setUI({ open: { ...UI().open, ['rep-' + id]: !more } })}>${mock ? (prev ? `직전 모의고사(${prev.name})와 비교 · 과목별 흐름` : '과목별 흐름') : e.kind === 'final' ? '같은 학기 중간고사와 비교' : '같은 학기 다른 시험과 비교'}<span class="caret">${more ? '▴' : '▾'}</span></button>
-      ${more ? (mock ? html`<${MockCompare} e=${e} prev=${prev} />` : sem ? html`<${NaesinCompare} sem=${sem} />` : null) : null}
+      ${more ? html`<div class="appear">${mock ? html`<${MockCompare} e=${e} prev=${prev} />` : sem ? html`<${NaesinCompare} sem=${sem} />` : null}</div>` : null}
     </div>
   </div></div>`;
 }

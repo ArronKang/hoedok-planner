@@ -81,7 +81,7 @@ function Summary({ list, day }) {
       <div class="sumbar" aria-hidden="true"><i style=${{ width: `${live.length ? (doneN / live.length) * 100 : 0}%` }}></i></div>
     </button>
     ${open
-      ? html`<div class="sumdetail">
+      ? html`<div class="sumdetail appear">
           ${bySub.map(([s, l]) => html`<div class="r hue" key=${s.id} style=${hue(s.h)}><span class="dot"></span><span>${s.name}</span><span class="num">${l.filter((t) => t.status === 'done').length}/${l.length}개 · ${C.amount(s, l.reduce((a, t) => a + taskPages(t), 0))}</span></div>`)}
           <div style="margin-top:10px" class="row"><span class="sub">예상 시간</span><span class="num" style="margin-left:auto">${minutes(mins)}</span><span class="muted">/ 공부 가능 ${cap ? minutes(cap) : '없음'}</span></div>
           ${cap ? html`<div class="capbar"><i style=${{ width: `${Math.min(100, (mins / Math.max(mins, cap)) * 100)}%` }}></i><b style=${{ left: `${(cap / Math.max(mins, cap)) * 100}%` }}></b></div>` : null}
@@ -230,7 +230,7 @@ export function TaskSheet({ id }) {
 
   let actions;
   if (mode === 'partial' && st) {
-    actions = html`<div class="hue" style=${hue(sub.h)}>
+    actions = html`<div class="hue appear" style=${hue(sub.h)}>
       <p class="sub" style="margin:0 0 4px;text-align:center">${C.trng(t)} 중 ${psg ? '몇 번 지문까지' : '어디까지'} 했어요?</p>
       <div class="upto"><input class="input big" inputmode="numeric" value=${String(val)} onInput=${(e) => setUpto(C.clamp(parseInt(e.target.value) || t.from - 1, t.from - 1, t.to))} aria-label=${psg ? '몇 번 지문까지' : '몇 쪽까지'} />${psg ? '번까지' : '쪽까지'}</div>
       <input class="range" type="range" min=${t.from - 1} max=${t.to} value=${val} onInput=${(e) => setUpto(+e.target.value)} aria-label=${psg ? '몇 번 지문까지' : '몇 쪽까지'} />
@@ -295,7 +295,7 @@ export function TaskSheet({ id }) {
       ${(t.photos || []).length ? html`<div style="margin-top:12px"><${Photos} t=${t} /></div>` : null}
       <button class="more-toggle" onClick=${() => setUI({ open: { ...UI().open, taskMore: !more } })} aria-expanded=${more ? 'true' : 'false'}>더 보기<span class="caret">${more ? '▴' : '▾'}</span></button>
       ${more
-        ? html`<div>
+        ? html`<div class="appear">
             <span class="label">중요도</span>
             <${Seg} label="중요도" value=${t.pri || 0} onChange=${(v) => set('pri', v || null)} options=${[[0, '없음'], [1, '!'], [2, '!!'], [3, '!!!']]} />
             ${t.kind === 'free'
@@ -359,7 +359,7 @@ function RepeatPick({ t, rule }) {
     <span class="label">반복 <span class="muted" style="font-weight:500">— 매일이나 요일마다 저절로 넣어요</span></span>
     <${Seg} label="반복" value=${mode} onChange=${pick} options=${[['none', '안 함'], ['daily', '매일'], ['week', '요일마다']]} />
     ${mode === 'week'
-      ? html`<div class="chips" style="margin-top:8px">${WEEK_ORDER.map((w) => html`<button key=${w} class="chip" style="min-height:36px;padding:0 12px" aria-pressed=${days.includes(w) ? 'true' : 'false'} aria-label=${C.WD[w] + '요일'} onClick=${() => {
+      ? html`<div class="chips appear" style="margin-top:8px">${WEEK_ORDER.map((w) => html`<button key=${w} class="chip" style="min-height:36px;padding:0 12px" aria-pressed=${days.includes(w) ? 'true' : 'false'} aria-label=${C.WD[w] + '요일'} onClick=${() => {
           const ds = days.includes(w) ? days.filter((x) => x !== w) : [...days, w];
           if (ds.length) apply(ds);
         }}>${C.WD[w]}</button>`)}</div>`
@@ -562,7 +562,7 @@ export function EndDaySheet({ past }) {
       return html`<div class="eod-item hue" key=${t.id} style=${hue(sub ? sub.h : 0)}>
         <div class="hd"><span class="dot"></span><b>${titleOf(t)}</b><small>${sub ? sub.name : ''} · ${md(snapDate(t, h))}</small></div>
         ${h
-          ? html`<div class="reasons">
+          ? html`<div class="reasons appear">
               <span class="small muted">${h.kind === 'move' ? `${mdws(target)}(으)로 옮겼어요` : '안 하기로 했어요'} · 이유 (선택)</span>
               <div class="chips" style="margin-top:6px">${C.MOVE_REASONS.map((r) => html`<button key=${r} class="chip" aria-pressed=${h.reason === r ? 'true' : 'false'} onClick=${() => {
                 C.setReason(t.id, h.reason === r ? null : r);
@@ -613,7 +613,7 @@ export function CalendarSheet({ pickFor, back, inline }) {
       <button class="ib" aria-label="이전 달" onClick=${() => shift(-1)}><${Icon} n="left" /></button>
       <button class="ib" aria-label="다음 달" onClick=${() => shift(1)}><${Icon} n="right" /></button>
     </div>
-    <div class="cal">
+    <div class="cal appear" key=${month}>
       ${C.WD.map((w, i) => html`<div key=${w} class=${'wd' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>${w}</div>`)}
       ${weeks.map((d) => {
         const l = tasksOn(d).filter((t) => t.status !== 'dropped');
@@ -658,6 +658,7 @@ export function WeekSheet() {
           <span class="sub">${md(w.from)}–${md(w.end)} · 계획한 것과 실제로 한 것</span>
           <button class="ib" aria-label="다음 주" disabled=${!back} onClick=${() => setBack(back - 1)}><${Icon} n="right" /></button>
         </div>`}
+    <div class="appear" key=${all ? 'all' : 'w' + back}>
     <div class="facts">
       <div class="fact"><div class="k">계획한 일</div><div class="v">${w.planned}<small>개</small></div></div>
       <div class="fact"><div class="k">끝낸 일</div><div class="v">${w.done}<small>개 · ${rate == null ? '–' : P(rate)}</small></div></div>
@@ -694,6 +695,7 @@ export function WeekSheet() {
           })}
         </tbody></table>`
       : html`<p class="hint" style="margin-top:0">끝낸 할 일을 누르면 걸린 시간을 고를 수 있어요. 적은 것만 여기서 예상과 나란히 보여요.</p>`}
+    </div>
   <//>`;
 }
 

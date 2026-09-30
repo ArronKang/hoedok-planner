@@ -84,7 +84,7 @@ export const kindOfName = (n) => (n.includes('모의') ? 'mock' : n.includes('�
 // ─────────── 상태 ───────────
 
 /** 기기마다 따로 두는 화면 설정 (동기화하지 않음). 나머지 prefs는 공부 설정이라 기기끼리 공유한다. */
-export const DEVICE_PREFS = ['theme', 'mode', 'size', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth'];
+export const DEVICE_PREFS = ['theme', 'mode', 'size', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth', 'motion', 'motionView'];
 
 export function blank() {
   return {
@@ -97,6 +97,8 @@ export function blank() {
       legend: true, lowest: true, recent: true,
       avail: [300, 180, 180, 180, 180, 180, 300], rest: [], dayStart: 4, pace: 3, dayMin: {},
       padAside: 'progress', listWidth: 'normal',
+      // 움직임: null = 아직 고른 적 없음 → 기기의 '동작 줄이기'를 따른다 (motion.js)
+      motion: null, motionView: true,
     },
     ui: { tab: 'today', day: null, stacks: { today: [], progress: [], grades: [] }, sheet: null, ob: 0, open: {}, toast: null, dev: 'pad' },
   };

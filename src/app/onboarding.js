@@ -16,7 +16,8 @@ function guessExam() {
 }
 
 function Card({ step, title, desc, children, foot }) {
-  return html`<div class="ob"><div class="ob-card">
+  // 단계가 바뀌면 새 카드가 부드럽게 나타난다
+  return html`<div class="ob"><div class="ob-card appear" key=${title}>
     <div class="ob-top">${step ? html`<span class="ob-step">${step}</span>` : null}<h2>${title}</h2>${desc ? html`<p>${desc}</p>` : null}</div>
     <div class="ob-body">${children}</div>
     <div class="ob-foot">${foot}</div>
