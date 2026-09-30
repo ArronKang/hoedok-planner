@@ -1,6 +1,48 @@
 // 서비스 워커(인터넷 없이 열기 + 홈 화면 설치). 새 버전이 준비되면 한 줄로 알려 준다.
-import { toast } from './core.js';
+import { toast, setUI } from './core.js';
 import { PREVIEW, ns } from '../env.js';
+
+// ─────────── 미리 보기를 홈 화면에 (앱처럼 열기) ───────────
+// 갤럭시(삼성 인터넷·크롬)는 설치 창을 바로 띄울 수 있다(beforeinstallprompt).
+// 아이폰은 그런 방법이 없어서 공유 › 홈 화면에 추가 안내를 보여 준다.
+let installEvent = null;
+if (PREVIEW && typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    installEvent = e;
+    setUI({});
+  });
+  window.addEventListener('appinstalled', () => {
+    installEvent = null;
+    toast("홈 화면에 '미리 보기'를 추가했어요");
+  });
+}
+/** 홈 화면 아이콘으로 연 것인가 (주소창 없이) */
+export const isStandalone = () =>
+  (typeof matchMedia === 'function' && matchMedia('(display-mode: standalone)').matches) || (typeof navigator !== 'undefined' && navigator.standalone === true);
+/** 설치 창을 바로 띄울 수 있나 */
+export const canPrompt = () => !!installEvent;
+export async function promptInstall() {
+  const e = installEvent;
+  if (!e) return false;
+  installEvent = null;
+  e.prompt();
+  try {
+    const r = await e.userChoice;
+    return r && r.outcome === 'accepted';
+  } finally {
+    setUI({});
+  }
+}
+/** 안내에 쓸 기기 종류 */
+export function platform() {
+  const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+  const ios = /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1);
+  if (ios) return 'ios';
+  if (/SamsungBrowser/.test(ua)) return 'samsung';
+  if (/Android/.test(ua)) return 'android';
+  return 'desktop';
+}
 
 /**
  * 미리 보기: 아무것도 저장하지 않는 서비스 워커(preview-sw.js)로 미리 보기 폴더만 맡는다.
