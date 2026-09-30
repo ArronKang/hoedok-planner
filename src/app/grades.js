@@ -113,7 +113,7 @@ export function ExamReport({ id, back }) {
       <span class="kicker">${mdws(e.date)}</span><h1>${e.name}</h1>
     </div>
     <div class="body">
-      <p class="sub" style="margin:0">왼쪽은 이 시험을 위해 공부한 기록, 오른쪽은 결과예요. 판단은 직접 해 보세요.</p>
+      <p class="sub" style="margin:0">과목마다 이 시험을 위해 공부한 기록과 결과를 나란히 놓았어요. 판단은 직접 해 보세요.</p>
       ${rows.length
         ? html`<div class="card pad">
             <div class="pair">
@@ -125,14 +125,14 @@ export function ExamReport({ id, back }) {
                 return [
                   html`<span class="sep" key=${r.name + 's'}></span>`,
                   html`<span class="sn hue" key=${r.name + 'n'} style=${hue(hOf(r.name))} onClick=${!mock ? () => toNaesin(r) : undefined}><span class="dot"></span>${r.name.replace('공통', '')}</span>`,
-                  html`<span class="cell2 hue" key=${r.name + 'a'} style=${hue(hOf(r.name))}>
+                  html`<span class="cell2 hue st" key=${r.name + 'a'} style=${hue(hOf(r.name))}>
                     ${s
                       ? html`<span class="t2"><b>${P(s.progress)}</b>진도</span><span class="hb"><i style=${{ width: `${s.progress * 100}%` }}></i></span><span class="t2">계획 ${s.planned}개 중 ${P(s.planDone)} 끝냄 · ${s.moved}번 미룸</span>`
                       : html`<span class="t2">기록 없음</span>`}
                   </span>`,
                   noScore
-                    ? html`<button class="cell2 linkcell" key=${r.name + 'b'} onClick=${() => toNaesin(r)}><span class="t2">점수 안 적음</span><span class="t2 go">적기 ›</span></button>`
-                    : html`<span class="cell2" key=${r.name + 'b'}>
+                    ? html`<button class="cell2 linkcell rs" key=${r.name + 'b'} onClick=${() => toNaesin(r)}><span class="t2">점수 안 적음</span><span class="t2 go">적기 ›</span></button>`
+                    : html`<span class="cell2 rs" key=${r.name + 'b'}>
                         ${mock
                           ? html`<span class="t2"><b>${r.grade}</b>등급 · 원점수 ${r.raw}${r.pctile != null ? ` · 백분위 ${r.pctile}` : ''}</span>`
                           : html`<span class="t2"><b>${fmt(r.score)}</b>점${r.avg != null ? ` · 평균보다 ${signed(r.score - r.avg)}` : ''}</span>`}

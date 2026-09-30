@@ -68,54 +68,31 @@ export function BackupSheet({ info }) {
   <//>`;
 }
 
+const MODE_LABEL = { auto: '기기 따라', light: '밝게', dark: '어둡게' };
+const SIZE_LABEL = { sm: '작게', md: '보통', lg: '크게', xl: '아주 크게' };
+
+/** 설정 첫 화면: 자주 쓰는 것부터. 화면 꾸미기는 한 단계 안으로 */
 function Root({ nav }) {
   const p = PR();
-  const pad = C.isPadDev();
   const [wipeAsk, setWipeAsk] = useState(false);
-  const toggleShow = (k) => setPrefs({ show: { ...p.show, [k]: !p.show[k] } });
+  const theme = THEMES.find((t) => t.id === p.theme) || THEMES[0];
   return html`<div>
-    <${Group} title="화면">
-      <div class="set-row col">
-        <span class="l"><b>디자인</b><small>셋 다 밝게·어둡게 모두 맞춰 두었어요</small></span>
-        <div class="preview-themes">${THEMES.map((t) => html`<button key=${t.id} class="theme-card" aria-pressed=${p.theme === t.id ? 'true' : 'false'} onClick=${() => setPrefs({ theme: t.id })}>
-          <span class="sw">${t.sw.map((c, i) => html`<i key=${i} style=${{ background: c, border: '1px solid rgba(0,0,0,.08)' }}></i>`)}</span>
-          <b>${t.name}</b><small>${t.desc}</small>
-        </button>`)}</div>
-      </div>
-      <${Row} label="밝기"><${Seg} label="밝기" value=${p.mode} onChange=${(v) => setPrefs({ mode: v })} options=${[['auto', '기기 따라'], ['light', '밝게'], ['dark', '어둡게']]} /><//>
-      <${Row} label="글자 크기"><${Seg} label="글자 크기" value=${p.size} onChange=${(v) => setPrefs({ size: v })} options=${[['sm', '작게'], ['md', '보통'], ['lg', '크게'], ['xl', '아주 크게']]} /><//>
-      <${Row} label="간격" small="한 화면에 보이는 양"><${Seg} label="간격" value=${p.density} onChange=${(v) => setPrefs({ density: v })} options=${[['compact', '촘촘'], ['normal', '보통'], ['relaxed', '넉넉']]} /><//>
-      ${!pad ? html`<${Row} label="＋ 단추 위치" small="쥐는 손 쪽으로"><${Seg} label="단추 위치" value=${p.hand} onChange=${(v) => setPrefs({ hand: v })} options=${[['left', '왼쪽'], ['right', '오른쪽']]} /><//>` : null}
-    <//>
-
-    <${Group} title="오늘 화면">
-      <${Row} label="시험 D-day"><${Switch} label="시험 D-day" on=${p.show.dday} onChange=${() => toggleShow('dday')} /><//>
-      <${Row} label="오늘 요약 막대" small="몇 개, 몇 쪽 했는지"><${Switch} label="오늘 요약" on=${p.show.summary} onChange=${() => toggleShow('summary')} /><//>
-      <${Row} label="지난 날 못 끝낸 일 알림"><${Switch} label="못 끝낸 일 알림" on=${p.show.overdue} onChange=${() => toggleShow('overdue')} /><//>
-      <${Row} label="끝낸 일은 아래로"><${Switch} label="끝낸 일은 아래로" on=${p.doneBottom} onChange=${(v) => setPrefs({ doneBottom: v })} /><//>
-    <//>
-
-    <${Group} title="진도 화면">
-      <${Row} label="진도 칸 아래 단계 이름"><${Switch} label="단계 이름" on=${p.legend} onChange=${(v) => setPrefs({ legend: v })} /><//>
-      <${Row} label="가장 적게 본 곳 알려주기" small="덜 본 쪽 구간을 한 줄로"><${Switch} label="가장 적게 본 곳" on=${p.lowest} onChange=${(v) => setPrefs({ lowest: v })} /><//>
-      <${Row} label="최근 2주 기록"><${Switch} label="최근 2주" on=${p.recent} onChange=${(v) => setPrefs({ recent: v })} /><//>
-    <//>
-
-    ${pad
-      ? html`<${Group} title="태블릿 화면">
-          <${Row} label="오늘 옆에 보일 것"><${Seg} label="오늘 옆" value=${p.padAside} onChange=${(v) => setPrefs({ padAside: v })} options=${[['progress', '진도'], ['calendar', '달력'], ['none', '없음']]} /><//>
-          <${Row} label="목록 너비" small="진도·성적 왼쪽 칸"><${Seg} label="목록 너비" value=${p.listWidth} onChange=${(v) => setPrefs({ listWidth: v })} options=${[['narrow', '좁게'], ['normal', '보통'], ['wide', '넓게']]} /><//>
-        <//>`
-      : null}
-
     <${Group} title="공부">
-      <${Row} label="공부 가능 시간" small="요일마다 · 쉬는 요일" onClick=${() => nav('time')} />
       <${Row} label=${C.isGoal() ? '끝낼 날' : '시험'} small=${D().exam ? `${D().exam.name} · ${C.mdws(D().exam.date)}` : '안 정함'} onClick=${() => (D().exam ? nav('exam') : openSheet({ type: 'cycle', step: 'next' }))} />
-      <${Row} label="과목" small=${`${D().subjects.length}개 · 색과 순서`} onClick=${() => nav('subjects')} />
+      <${Row} label="과목" small=${`${D().subjects.length}개 · 색·순서·성적 계산`} onClick=${() => nav('subjects')} />
+      <${Row} label="공부 가능 시간" small="요일마다 · 쉬는 요일 · 날짜마다" onClick=${() => nav('time')} />
+    <//>
+
+    <${Group}>
+      <${Row} label="계정 · 동기화" small=${syncSmall()} onClick=${() => nav('account')} />
+    <//>
+
+    <${Group} title="화면">
+      <${Row} label="디자인 · 글자" small=${`${theme.name} · ${MODE_LABEL[p.mode]} · 글자 ${SIZE_LABEL[p.size]}`} onClick=${() => nav('display')} />
+      <${Row} label="보일 것 고르기" small="오늘·진도 화면에 무엇을 보일지" onClick=${() => nav('views')} />
     <//>
 
     <${Group} title="자료">
-      <${Row} label="계정 · 동기화" small=${syncSmall()} onClick=${() => nav('account')} />
       <${Row} label="파일로 내보내기" small="모든 공부 기록을 파일 하나로. 사진은 빠져요" onClick=${exportFile} />
       <label class="set-row" style="cursor:pointer">
         <span class="l"><b>파일에서 불러오기</b><small>내보낸 파일로 지금 기록을 바꿔요</small></span><${Icon} n="right" s=${18} />
@@ -130,7 +107,55 @@ function Root({ nav }) {
         }}
       />
     <//>
-    <p class="hint" style="text-align:center">여기 화면 설정은 이 기기에만 저장돼요.</p>
+  </div>`;
+}
+
+/** 디자인·밝기·글자·간격 (+ 태블릿 배치). 이 기기에만 저장 */
+function DisplayPage() {
+  const p = PR();
+  const pad = C.isPadDev();
+  return html`<div>
+    <${Group} title="화면">
+      <div class="set-row col">
+        <span class="l"><b>디자인</b><small>셋 다 밝게·어둡게 모두 맞춰 두었어요</small></span>
+        <div class="preview-themes">${THEMES.map((t) => html`<button key=${t.id} class="theme-card" aria-pressed=${p.theme === t.id ? 'true' : 'false'} onClick=${() => setPrefs({ theme: t.id })}>
+          <span class="sw">${t.sw.map((c, i) => html`<i key=${i} style=${{ background: c, border: '1px solid rgba(0,0,0,.08)' }}></i>`)}</span>
+          <b>${t.name}</b><small>${t.desc}</small>
+        </button>`)}</div>
+      </div>
+      <${Row} label="밝기"><${Seg} label="밝기" value=${p.mode} onChange=${(v) => setPrefs({ mode: v })} options=${[['auto', '기기 따라'], ['light', '밝게'], ['dark', '어둡게']]} /><//>
+      <${Row} label="글자 크기"><${Seg} label="글자 크기" value=${p.size} onChange=${(v) => setPrefs({ size: v })} options=${[['sm', '작게'], ['md', '보통'], ['lg', '크게'], ['xl', '아주 크게']]} /><//>
+      <${Row} label="간격" small="한 화면에 보이는 양"><${Seg} label="간격" value=${p.density} onChange=${(v) => setPrefs({ density: v })} options=${[['compact', '촘촘'], ['normal', '보통'], ['relaxed', '넉넉']]} /><//>
+      ${!pad ? html`<${Row} label="＋ 단추 위치" small="쥐는 손 쪽으로"><${Seg} label="단추 위치" value=${p.hand} onChange=${(v) => setPrefs({ hand: v })} options=${[['left', '왼쪽'], ['right', '오른쪽']]} /><//>` : null}
+    <//>
+    ${pad
+      ? html`<${Group} title="태블릿 화면">
+          <${Row} label="오늘 옆에 보일 것"><${Seg} label="오늘 옆" value=${p.padAside} onChange=${(v) => setPrefs({ padAside: v })} options=${[['progress', '진도'], ['calendar', '달력'], ['none', '없음']]} /><//>
+          <${Row} label="목록 너비" small="진도·성적 왼쪽 칸"><${Seg} label="목록 너비" value=${p.listWidth} onChange=${(v) => setPrefs({ listWidth: v })} options=${[['narrow', '좁게'], ['normal', '보통'], ['wide', '넓게']]} /><//>
+        <//>`
+      : null}
+    <p class="hint" style="text-align:center">화면 설정은 이 기기에만 저장돼요. 다른 기기는 따로 정해요.</p>
+  </div>`;
+}
+
+/** 오늘·진도 화면에 보일 것 */
+function ViewsPage() {
+  const p = PR();
+  const toggleShow = (k) => setPrefs({ show: { ...p.show, [k]: !p.show[k] } });
+  return html`<div>
+    <${Group} title="오늘 화면">
+      <${Row} label="시험 D-day"><${Switch} label="시험 D-day" on=${p.show.dday} onChange=${() => toggleShow('dday')} /><//>
+      <${Row} label="오늘 요약 막대" small="몇 개, 몇 쪽 했는지"><${Switch} label="오늘 요약" on=${p.show.summary} onChange=${() => toggleShow('summary')} /><//>
+      <${Row} label="지난 날 못 끝낸 일 알림"><${Switch} label="못 끝낸 일 알림" on=${p.show.overdue} onChange=${() => toggleShow('overdue')} /><//>
+      <${Row} label="끝낸 일은 아래로"><${Switch} label="끝낸 일은 아래로" on=${p.doneBottom} onChange=${(v) => setPrefs({ doneBottom: v })} /><//>
+    <//>
+
+    <${Group} title="진도 화면">
+      <${Row} label="진도 칸 아래 단계 이름"><${Switch} label="단계 이름" on=${p.legend} onChange=${(v) => setPrefs({ legend: v })} /><//>
+      <${Row} label="가장 적게 본 곳 알려주기" small="덜 본 쪽 구간을 한 줄로"><${Switch} label="가장 적게 본 곳" on=${p.lowest} onChange=${(v) => setPrefs({ lowest: v })} /><//>
+      <${Row} label="최근 2주 기록"><${Switch} label="최근 2주" on=${p.recent} onChange=${(v) => setPrefs({ recent: v })} /><//>
+    <//>
+    <p class="hint" style="text-align:center">겉에는 적게, 필요한 것만 켜 두세요.</p>
   </div>`;
 }
 
@@ -232,7 +257,14 @@ function SubjectsPage() {
   </div>`;
 }
 
-const PAGES = { time: ['공부 시간', TimePage], exam: ['시험', ExamPage], subjects: ['과목', SubjectsPage], account: ['계정 · 동기화', AccountPage] };
+const PAGES = {
+  time: ['공부 시간', TimePage],
+  exam: ['시험', ExamPage],
+  subjects: ['과목', SubjectsPage],
+  account: ['계정 · 동기화', AccountPage],
+  display: ['디자인 · 글자', DisplayPage],
+  views: ['보일 것 고르기', ViewsPage],
+};
 
 export function SettingsSheet({ page }) {
   const [cur, setCur] = useState(page || null);

@@ -127,6 +127,39 @@ function App() {
 
 const isDark = (p) => p.mode === 'dark' || (p.mode === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
 
+// ─────────── 뒤로 가기 ───────────
+// 안드로이드 뒤로 가기(와 아이폰 Safari의 뒤로 밀기)가 앱을 끄지 않고
+// 열린 창을 닫거나 한 단계 앞 화면으로 가게 한다. 화면 깊이만큼 브라우저 기록을 맞춰 둔다.
+function initBack() {
+  const depthOf = (s) => (s.ui.sheet ? 1 : 0) + ((s.ui.stacks || {})[s.ui.tab] || []).length;
+  let depth = depthOf(store.get());
+  let ignore = 0; // 앱이 스스로 되돌린 기록에서 오는 popstate는 무시
+  store.subscribe((s) => {
+    const d = depthOf(s);
+    if (d > depth) for (let i = depth; i < d; i++) history.pushState({ hoedok: i + 1 }, '');
+    else if (d < depth && history.state && history.state.hoedok) {
+      ignore++;
+      history.go(-Math.min(depth - d, history.state.hoedok));
+    }
+    depth = d;
+  });
+  window.addEventListener('popstate', () => {
+    if (ignore > 0) {
+      ignore--;
+      return;
+    }
+    const ui = C.UI();
+    const stack = (ui.stacks || {})[ui.tab] || [];
+    if (ui.sheet) {
+      depth--;
+      C.closeSheet();
+    } else if (stack.length) {
+      depth--;
+      C.pop(ui.tab);
+    }
+  });
+}
+
 // ─────────── 시작 ───────────
 
 function detectDev() {
@@ -162,6 +195,7 @@ async function boot() {
   root.textContent = '';
   render(html`<${App} />`, root);
   store.subscribe(() => requestAnimationFrame(syncChrome));
+  initBack();
   requestAnimationFrame(syncChrome);
   if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => C.setUI({}));
   document.addEventListener('keydown', (e) => {

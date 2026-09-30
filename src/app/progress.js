@@ -293,7 +293,7 @@ export function ProgressMenu() {
         : row('다음 시험 정하기', '시험이나 끝낼 날', () => openSheet({ type: 'cycle', step: 'next' }))}
       ${ex ? row(C.isGoal(ex) ? '이 기간 정리하기' : '이 시험 정리하기', C.isGoal(ex) ? '남은 할 일을 치우고 다음을 정해요' : '결과를 적고 다음 시험을 준비해요', () => openSheet({ type: 'cycle' })) : null}
     </div>
-    <p class="hint">진도 화면에 보일 것은 설정 › 진도 화면에서 고를 수 있어요.</p>
+    <button class="linkrow-btn" onClick=${() => openSheet({ type: 'settings', page: 'views' })}>진도 화면에 보일 것 고르기 ›</button>
   <//>`;
 }
 

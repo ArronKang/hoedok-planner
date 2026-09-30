@@ -140,17 +140,18 @@ export function TodayScreen({ compact }) {
         : html`<p>아래 ＋로 할 일을 넣어 보세요.</p>`}
     </div>`;
   } else if (p.group === 'subject') {
-    body = D()
+    // 하루 할 일은 한 장에: 과목은 상자 대신 제목줄로 나눈다 (한 화면에 더 많이, 덜 어지럽게)
+    body = html`<div class="daylist">${D()
       .subjects.map((s) => [s, C.sortTasks(list.filter((t) => t.subjectId === s.id), 'subject')])
       .filter(([, l]) => l.length)
       .map(
-        ([s, l]) => html`<section class="group hue" key=${s.id} style=${hue(s.h)}>
+        ([s, l]) => html`<section class="group hue" key=${s.id} style=${hue(s.h)} aria-label=${s.name}>
           <div class="group-h"><span class="dot"></span>${s.name}<span class="num">${l.filter((t) => t.status === 'done').length}/${l.length}</span></div>
           ${l.map((t) => html`<${TaskRow} key=${t.id} t=${t} />`)}
         </section>`,
-      );
+      )}</div>`;
   } else {
-    body = html`<section class="group">${C.sortTasks(list, p.group).map((t) => html`<${TaskRow} key=${t.id} t=${t} showSubject />`)}</section>`;
+    body = html`<div class="daylist"><section class="group">${C.sortTasks(list, p.group).map((t) => html`<${TaskRow} key=${t.id} t=${t} showSubject />`)}</section></div>`;
   }
   const dday = ex ? diffDays(td, ex.date) : null;
   return html`<div class="screen">
@@ -163,6 +164,7 @@ export function TodayScreen({ compact }) {
       </div>
       ${day !== td ? html`<button class="btn sm quiet" onClick=${() => setUI({ day: null })}>오늘로</button>` : null}
       ${ex && p.show.dday && dday > 0 ? html`<button class="dday-chip" onClick=${() => C.go('progress')}>${ex.name.replace(/^\d학기 /, '')}<b>D-${dday}</b></button>` : null}
+      ${isPad() ? html`<button class="ib" aria-label="할 일 추가" title="할 일 추가" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" /></button>` : null}
       <button class="ib" aria-label="더 보기" onClick=${() => openSheet({ type: 'todayMenu' })}><${Icon} n="more" /></button>
     </header>
     <div class="scroll"><div class="body">
@@ -194,7 +196,7 @@ export function TodayMenu() {
       ${row('이번 주 돌아보기', '계획한 것과 한 것', () => openSheet({ type: 'week' }))}
       ${row('달력', '다른 날 보기', () => openSheet({ type: 'calendar' }))}
     </div></div>
-    <p class="hint">오늘 화면에 보일 것은 설정 › 오늘 화면에서 고를 수 있어요.</p>
+    <button class="linkrow-btn" onClick=${() => openSheet({ type: 'settings', page: 'views' })}>오늘 화면에 보일 것 고르기 ›</button>
   <//>`;
 }
 
@@ -269,7 +271,11 @@ export function TaskSheet({ id }) {
       ${t.kind === 'free'
         ? html`<input class="input" style="font-size:1.15em;font-weight:650" key=${'t' + t.id} defaultValue=${t.title} aria-label="할 일 이름" onChange=${(e) => set('title', e.target.value.trim() || t.title)} />`
         : html`<h3 style="margin:0 0 2px;font-size:1.25em">${st ? st.name : ''}</h3>
-          <p class="sub" style="margin:0">${st ? C.bookOf(sub, st)?.name : ''} ${C.trng(t)} · ${C.amount(sub, taskPages(t))}</p>`}
+          <p class="sub" style="margin:0">${(() => {
+            // 단계 이름에 교재 이름이 들어 있으면 또 쓰지 않는다 (2회독 · 평가문제집 → p.31–40)
+            const bn = st ? C.bookOf(sub, st)?.name || '' : '';
+            return `${bn && !st.name.includes(bn) ? bn + ' ' : ''}${C.trng(t)} · ${C.amount(sub, taskPages(t))}`;
+          })()}</p>`}
       <div style="margin:16px 0 14px">${actions}</div>
       ${t.kind === 'track' && sub ? html`<div class="kv"><span class="k">진도</span><button class="v" onClick=${() => C.push('progress', { view: 'subject', id: sub.id }, true)}>${sub.name} ${P(C.pct(sub))} ›</button></div>` : null}
       <div class="kv"><span class="k">날짜</span><span class="v">${mdws(t.date)}${t.at ? ` · ${t.at}` : ''}</span></div>

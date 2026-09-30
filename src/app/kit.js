@@ -84,10 +84,31 @@ export function Stepper({ value, step = 30, min = 0, max = 960, fmtv, onChange, 
 /** 시트 틀 */
 export function Sheet({ title, children, footer, tall, wide, onClose }) {
   const close = onClose || closeSheet;
+  const box = useRef(null);
+  const drag = useRef(null);
+  // 휴대폰: 위쪽 손잡이 줄을 끌어내리면 닫힌다 (손가락을 따라 움직이기만 하고 효과는 없음)
+  const down = (e) => {
+    if (UI().dev !== 'phone' || e.target.closest('button')) return;
+    drag.current = { y: e.clientY, id: e.pointerId, dy: 0 };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+  const move = (e) => {
+    const d = drag.current;
+    if (!d || d.id !== e.pointerId) return;
+    d.dy = Math.max(0, e.clientY - d.y);
+    if (box.current) box.current.style.transform = d.dy ? `translateY(${d.dy}px)` : '';
+  };
+  const up = () => {
+    const d = drag.current;
+    drag.current = null;
+    if (!d) return;
+    if (box.current) box.current.style.transform = '';
+    if (d.dy > 90) close();
+  };
   return html`<div>
     <div class="veil" onClick=${close}></div>
-    <div class=${'sheet' + (tall ? ' tall' : '') + (wide ? ' wide' : '')} role="dialog" aria-label=${title}>
-      <div class="sheet-h"><span class="grab"></span><h2 class="ell">${title}</h2><button class="ib" aria-label="닫기" onClick=${close}><${Icon} n="x" /></button></div>
+    <div class=${'sheet' + (tall ? ' tall' : '') + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label=${title} ref=${box}>
+      <div class="sheet-h" onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}><span class="grab"></span><h2 class="ell">${title}</h2><button class="ib" aria-label="닫기" onClick=${close}><${Icon} n="x" /></button></div>
       <div class="sheet-b">${children}</div>
       ${footer ? html`<div class="sheet-f">${footer}</div>` : null}
     </div>

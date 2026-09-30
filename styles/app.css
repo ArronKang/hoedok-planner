@@ -28,14 +28,14 @@ body {
 .device[data-theme='paper'] {
   --num: var(--serif); --num-w: 500; --ls: -.02em;
   --bg: #f4f1e8; --bg-2: #ece7da; --surf: #fdfcf8; --surf-2: #f3efe4; --sunk: #e6e0d1;
-  --line: #e0d9c8; --line-2: #c7bea7; --ink: #26241e; --ink-2: #57514a; --ink-3: #847d6c;
+  --line: #e0d9c8; --line-2: #c7bea7; --ink: #26241e; --ink-2: #57514a; --ink-3: #6c6658;
   --accent: #1f5c4a; --accent-soft: #dfece5; --on-accent: #fdfcf8; --flag: #b8552b;
   --r: 6px; --r-lg: 10px; --sh: 0 1px 0 rgba(90, 80, 55, .06);
   --sat: 44%; --lit: 44%;
 }
 .device[data-theme='paper'][data-mode='dark'] {
   --bg: #17161b; --bg-2: #1d1c22; --surf: #211f27; --surf-2: #29272f; --sunk: #141318;
-  --line: #312f39; --line-2: #4a4655; --ink: #ece8df; --ink-2: #b3ad9c; --ink-3: #857f70;
+  --line: #312f39; --line-2: #4a4655; --ink: #ece8df; --ink-2: #b3ad9c; --ink-3: #969183;
   --accent: #6dc0a2; --accent-soft: #1d302a; --on-accent: #10221c; --flag: #e8875a; --sh: none;
   --sat: 50%; --lit: 62%;
 }
@@ -43,14 +43,14 @@ body {
 .device[data-theme='crisp'] {
   --num: var(--mono); --num-w: 500; --ls: -.03em;
   --bg: #fafaf9; --bg-2: #f2f2f0; --surf: #fff; --surf-2: #f4f4f2; --sunk: #e8e8e5;
-  --line: #e3e3e0; --line-2: #c4c4bf; --ink: #131314; --ink-2: #4d4d52; --ink-3: #85858a;
+  --line: #e3e3e0; --line-2: #c4c4bf; --ink: #131314; --ink-2: #4d4d52; --ink-3: #6c6c70;
   --accent: #18181a; --accent-soft: #ececea; --on-accent: #fff; --flag: #c0501a;
   --r: 3px; --r-lg: 4px; --sh: none;
   --sat: 60%; --lit: 44%;
 }
 .device[data-theme='crisp'][data-mode='dark'] {
   --bg: #0b0b0c; --bg-2: #101012; --surf: #131315; --surf-2: #1a1a1d; --sunk: #060607;
-  --line: #26262b; --line-2: #3b3b42; --ink: #f2f2f3; --ink-2: #a3a3aa; --ink-3: #6f6f77;
+  --line: #26262b; --line-2: #3b3b42; --ink: #f2f2f3; --ink-2: #a3a3aa; --ink-3: #83838c;
   --accent: #f2f2f3; --accent-soft: #1e1e22; --on-accent: #0b0b0c; --flag: #ff7a45;
   --sat: 72%; --lit: 60%;
 }
@@ -58,14 +58,14 @@ body {
 .device[data-theme='soft'] {
   --num: var(--geo); --num-w: 600; --ls: -.03em;
   --bg: #f1f2f5; --bg-2: #e8e9ee; --surf: #fff; --surf-2: #f5f6f8; --sunk: #e6e8ec;
-  --line: #e7e9ed; --line-2: #cfd3da; --ink: #1b1d21; --ink-2: #545962; --ink-3: #8a909a;
+  --line: #e7e9ed; --line-2: #cfd3da; --ink: #1b1d21; --ink-2: #474c55; --ink-3: #616771;
   --accent: #3d5afe; --accent-soft: #e8ecff; --on-accent: #fff; --flag: #e85d22;
   --r: 12px; --r-lg: 18px; --sh: 0 1px 2px rgba(20, 24, 33, .05), 0 6px 18px -8px rgba(20, 24, 33, .12);
   --sat: 62%; --lit: 54%;
 }
 .device[data-theme='soft'][data-mode='dark'] {
   --bg: #101218; --bg-2: #161922; --surf: #1b1f29; --surf-2: #222733; --sunk: #0b0d12;
-  --line: #272d3a; --line-2: #3b4352; --ink: #eef0f4; --ink-2: #aab1be; --ink-3: #747c8b;
+  --line: #272d3a; --line-2: #3b4352; --ink: #eef0f4; --ink-2: #aab1be; --ink-3: #89909c;
   --accent: #8d9dff; --accent-soft: #232a45; --on-accent: #10131c; --flag: #ff8a5c;
   --sh: 0 2px 14px rgba(0, 0, 0, .35); --sat: 66%; --lit: 64%;
 }
@@ -690,3 +690,41 @@ h3.q { margin: 0 0 12px; font-size: 1.2em; letter-spacing: var(--ls); }
 .toast .m { padding: 6px 8px 6px 0; }
 .toast button { background: none; border: 0; font: inherit; font-weight: 700; color: var(--bg); opacity: .8; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 8px 12px; white-space: nowrap; }
 .toast button:hover { opacity: 1; }
+
+/* ═══════════ UI 다듬기 (2026-09-30) ═══════════ */
+
+/* 오늘: 하루 할 일은 한 장에. 과목은 상자 대신 제목줄로 나눈다 */
+.daylist { background: var(--surf); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--sh); overflow: hidden; }
+.device .daylist .group { background: none; border: 0; border-radius: 0; box-shadow: none; overflow: visible; }
+.device .daylist .group + .group { border-top: 1px solid var(--line-2); }
+.device .daylist .group-h { padding: 12px 14px 2px; }
+.device[data-theme='crisp'] .daylist { border-radius: 0; border-width: 1px 0; box-shadow: none; background: transparent; }
+
+/* 태블릿·PC: 넓은 칸에서도 읽기 좋은 폭으로 (가운데 정렬) */
+.device.pad .col.main .body,
+.device.pad .col.main .head,
+.device.pad .col.main .sp-head,
+.device.pad .col.main .overall { width: 100%; max-width: 820px; margin-left: auto; margin-right: auto; }
+
+/* 휴대폰 시험 리포트: 세 칸 대신 과목마다 '공부한 것'과 '결과'를 위아래로 */
+.device.phone .pair { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.device.phone .pair .h { display: none; }
+.device.phone .pair .sn { margin-top: 4px; }
+.device.phone .pair .cell2 { display: grid; grid-template-columns: 62px minmax(0, 1fr); column-gap: 10px; row-gap: 3px; align-items: center; }
+.device.phone .pair .cell2 > * { grid-column: 2; }
+.device.phone .pair .cell2::before { grid-column: 1; grid-row: 1 / 4; align-self: start; padding-top: 4px; font-size: max(12px, .78em); font-weight: 700; color: var(--ink-3); }
+.device.phone .pair .cell2.st::before { content: '공부한 것'; }
+.device.phone .pair .cell2.rs::before { content: '결과'; }
+
+/* 키보드로 쓸 때 지금 고른 곳이 보이게 (손가락·마우스로 누를 때는 안 보임) */
+.device :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.device .input:focus-visible { outline-offset: -1px; }
+.device :focus:not(:focus-visible) { outline: none; }
+
+/* 누르기 쉬운 크기 */
+.dayplan .dtime { min-height: 30px; padding: 3px 11px; }
+/* 같은 과목 안의 구분선은 체크 동그라미 뒤에서 시작 → 과목 경계(전체 폭 선)와 구분된다 */
+.device .daylist .task + .task { border-top: 0; }
+.device .daylist .task + .task::before { content: ''; position: absolute; z-index: 1; top: 0; left: 50px; right: 0; border-top: 1px solid var(--line); pointer-events: none; }
+/* 휴대폰 시트 손잡이 줄: 끌어내리기 */
+.device.phone .sheet-h { touch-action: none; cursor: grab; }
