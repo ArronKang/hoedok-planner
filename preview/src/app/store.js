@@ -6,6 +6,7 @@
 import * as db from '../data/db.js';
 import * as C from './core.js';
 import { ns } from '../env.js';
+import { SECURE_KV_KEYS } from '../sync/secure-store.js';
 
 const DEVICE_KEY = ns('hoedok.device.v1');
 /** 자료 안의 목록 → 저장소 표 이름 */
@@ -34,7 +35,9 @@ const fromRec = (key, r) => {
 
 function metaRec() {
   const d = C.D(), p = C.PR();
-  return { id: 'main', onboarded: !!d.onboarded, exam: d.exam || null, lastExam: d.lastExam || null, study: Object.fromEntries(C.STUDY_PREFS.map((k) => [k, p[k]])) };
+  const m = { id: 'main', onboarded: !!d.onboarded, exam: d.exam || null, lastExam: d.lastExam || null, study: Object.fromEntries(C.STUDY_PREFS.map((k) => [k, p[k]])) };
+  if (d.demo) m.demo = true; // 예시인 동안은 동기화가 멈춘다 (sync.js)
+  return m;
 }
 const devicePrefs = () => Object.fromEntries(C.DEVICE_PREFS.map((k) => [k, C.PR()[k]]));
 function loadDevice() {
@@ -45,6 +48,15 @@ function loadDevice() {
   }
 }
 export const isStorageOk = () => storageOk;
+
+/**
+ * 예시 끝내기: 이 기기의 기록을 모두 지운다. 서버로 보낼 것(대기열)도 남기지 않아 예시가 계정에 올라갈 길이 없다.
+ * 로그인 정보는 남긴다. 부른 쪽이 화면을 새로 연다 (location.reload).
+ */
+export async function wipeThisDevice() {
+  ready = false; // 지우는 동안·새로 열기 전까지 화면 자료를 다시 저장하지 않게
+  await db.wipeLocal({ keepKv: [...SECURE_KV_KEYS, 'secret:session', 'sync:owner'] });
+}
 
 function readAll() {
   const byCreated = (a, b) => (a.createdAt || 0) - (b.createdAt || 0);
@@ -79,11 +91,18 @@ export async function initStore() {
     return;
   }
   const meta = db.get('meta', 'main');
-  C.hydrate({ ...readAll(), onboarded: !!(meta && meta.onboarded), exam: (meta && meta.exam) || null, lastExam: (meta && meta.lastExam) || null }, { ...dev, ...((meta && meta.study) || {}) });
+  const data = { ...readAll(), onboarded: !!(meta && meta.onboarded), demo: !!(meta && meta.demo), exam: (meta && meta.exam) || null, lastExam: (meta && meta.lastExam) || null };
+  data.demo = C.looksLikeDemo(data);
+  C.hydrate(data, { ...dev, ...((meta && meta.study) || {}) });
   snapshot();
   lastV = C.store.get().v;
   lastPrefs = C.PR();
   ready = true;
+  // 예시 표시가 생기기 전에 연 예시 → 표시를 적어 둔다 (동기화가 이것을 보고 멈춘다)
+  if (data.demo && !(meta && meta.demo)) {
+    savedMeta = '';
+    persistNow();
+  }
   C.store.subscribe(onStore);
   db.subscribe(onDb);
   const bye = () => {
@@ -188,6 +207,7 @@ function onDb(changed) {
       if (j !== savedMeta) {
         savedMeta = j;
         d.onboarded = !!r.onboarded;
+        d.demo = !!r.demo;
         d.exam = r.exam || null;
         d.lastExam = r.lastExam || null;
         if (r.study) C.setPrefs(r.study);

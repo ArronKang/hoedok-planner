@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from '../lib/ui.js';
 import * as C from './core.js';
 import { Icon, Check, Sheet, Swipe, hue, Seg, Stepper, isPad } from './kit.js';
 import { savePhoto, photoURL } from './photos.js';
+import { installHintOn, hideInstallHint, openInstall } from './pwa.js';
 
 const { D, PR, UI, today, viewDay, setUI, openSheet, closeSheet, commit, withUndo, toast, subById, taskStage, taskPages, taskMinutes, tasksOn, overdue, addDays, diffDays, mdw, mdws, md, minutes, P } = C;
 
@@ -127,6 +128,14 @@ function Banners({ day }) {
   const od = overdue();
   if (od.length && p.show.overdue)
     out.push(html`<button class="banner" key="od" onClick=${() => openSheet({ type: 'endday', past: true })}><span>지난 날 못 끝낸 <b class="num">${od.length}</b>개가 있어요</span><span class="go">정리하기</span></button>`);
+  // 예시를 보는 중이면 빠져나가는 길을 한 줄로 (설정 맨 위의 '예시 끝내기'로)
+  if (C.isDemo()) out.push(html`<button class="banner quiet" key="demo" onClick=${() => openSheet({ type: 'settings' })}><span>예시 기록을 보고 있어요</span><span class="go">내 기록으로 시작</span></button>`);
+  // 브라우저 창으로 열었을 때만: 홈 화면에 추가하면 앱처럼 열려요 (닫으면 다시 안 뜸)
+  if (installHintOn())
+    out.push(html`<div class="banner quiet with-x" key="inst">
+      <button class="b" onClick=${openInstall}><span>홈 화면에 추가하면 앱처럼 열려요</span><span class="go">방법</span></button>
+      <button class="x" aria-label="이 안내 닫기" onClick=${hideInstallHint}><${Icon} n="x" s=${16} /></button>
+    </div>`);
   return out.length ? html`<div class="stack">${out}</div>` : null;
 }
 

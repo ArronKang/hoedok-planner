@@ -1,14 +1,15 @@
 // 앱 틀: 휴대폰(한 화면 + 아래 탭) / 태블릿·PC(왼쪽 막대 + 두 칸)
 import { html } from '../lib/html.js';
-import { render, useStore, useErrorBoundary, useRef, useLayoutEffect } from '../lib/ui.js';
+import { render, useStore, useErrorBoundary, useRef, useLayoutEffect, useEffect } from '../lib/ui.js';
 import * as C from './core.js';
 import * as M from './motion.js';
 import { initStore, isStorageOk } from './store.js';
 import { gcPhotos } from './photos.js';
-import { registerSW, isStandalone, canPrompt, promptInstall, platform } from './pwa.js';
-import { initSync } from '../sync/sync.js';
+import { registerSW, isStandalone, canPrompt, promptInstall, platform, keepStorage } from './pwa.js';
+import { initSync, needsAttention } from '../sync/sync.js';
 import { PREVIEW, ns, previewLabel } from '../env.js';
 import { syncState } from '../sync/state.js';
+import { ensureFont } from './fonts.js';
 import { Icon, Toast, hue, StageBar, useFade, Sheet } from './kit.js';
 import { TodayScreen, TodayMenu, TaskSheet, AddSheet, EndDaySheet, CalendarSheet, WeekSheet, PlanSheet, PhotoSheet, DueSheet, RepeatsSheet } from './today.js';
 import { ProgressList, SubjectPage, RecordSheet, SubjectMenu, ProgressMenu, ColorSheet, SetupSheet, RoutineSheet, EditSheet, AddSubjectSheet } from './progress.js';
@@ -38,8 +39,11 @@ function PreviewBar() {
   </button>`;
 }
 
+// ─────────── 홈 화면에 추가 (앱처럼 열기) ───────────
+
+const APP_NAME = PREVIEW ? '미리 보기' : '회독 플래너';
 const INSTALL_STEPS = {
-  ios: ['화면 아래(아이패드는 위)의 공유 단추 □↑ 를 눌러요', "목록을 내려 '홈 화면에 추가'를 눌러요", "이름이 '미리 보기'인지 보고 오른쪽 위 '추가'를 눌러요"],
+  ios: ['화면 아래(아이패드는 위)의 공유 단추 □↑ 를 눌러요', "목록을 내려 '홈 화면에 추가'를 눌러요", `이름이 '${APP_NAME}'인지 보고 오른쪽 위 '추가'를 눌러요`],
   samsung: ['화면 아래 메뉴 ≡ 를 눌러요', "'현재 페이지 추가'(버전에 따라 '페이지 추가')를 눌러요", "'홈 화면'을 골라요"],
   android: ['오른쪽 위 ⋮ 메뉴를 눌러요', "'홈 화면에 추가' 또는 '앱 설치'를 눌러요", "'설치'나 '추가'를 눌러요"],
   desktop: ['주소창 오른쪽의 설치 표시나 브라우저 메뉴를 눌러요', "'앱 설치' 또는 '바로가기 만들기'를 골라요"],
@@ -50,19 +54,28 @@ const OTHER = { ios: '아이폰·아이패드 (Safari)', samsung: '갤럭시 (�
 function InstallSheet() {
   const me = platform();
   const steps = (k) => html`<ol class="steps-list">${INSTALL_STEPS[k].map((s, i) => html`<li key=${i}>${s}</li>`)}</ol>`;
-  return html`<${Sheet} title="미리 보기를 홈 화면에" footer=${canPrompt() ? html`<button class="btn pri" onClick=${() => promptInstall().then(C.closeSheet)}>지금 추가하기</button>` : html`<button class="btn pri" onClick=${C.closeSheet}>알겠어요</button>`}>
-    <p class="sub" style="margin:0 0 14px">한 번만 추가해 두면 앱처럼 아이콘을 눌러 열 수 있어요. 새로 올린 수정본은 다음에 열 때 저절로 보여요.</p>
+  return html`<${Sheet} title=${PREVIEW ? '미리 보기를 홈 화면에' : '홈 화면에 앱으로 추가'} footer=${canPrompt() ? html`<button class="btn pri" onClick=${() => promptInstall().then(C.closeSheet)}>지금 추가하기</button>` : html`<button class="btn pri" onClick=${C.closeSheet}>알겠어요</button>`}>
+    <p class="sub" style="margin:0 0 14px">${PREVIEW
+      ? '한 번만 추가해 두면 앱처럼 아이콘을 눌러 열 수 있어요. 새로 올린 수정본은 다음에 열 때 저절로 보여요.'
+      : '한 번만 추가해 두면 아이콘을 눌러 앱처럼 열려요. 주소창 없이 화면을 꽉 채우고, 인터넷이 없어도 열려요.'}</p>
     <div class="sec-title" style="margin-top:0">${OTHER[me]}</div>
     ${steps(me)}
     ${me === 'samsung' ? html`<p class="hint">주소창에 설치 표시(⬇)가 보이면 그걸 눌러도 돼요.</p>` : null}
-    ${me === 'ios' ? html`<p class="hint">Safari에서 하는 게 가장 확실해요. 홈 화면의 미리 보기는 Safari와 저장 공간이 따로라, 처음 열면 '예시로 먼저 둘러보기'부터 시작해요.</p>` : null}
-    <p class="hint">주황색 아이콘 '미리 보기'가 생겨요. 실제 앱(초록 아이콘)과 기록이 따로라 무엇을 해도 실제 기록은 그대로예요.</p>
+    ${me === 'ios'
+      ? html`<p class="hint">Safari에서 해야 해요. 아이콘으로 연 앱은 Safari와 기록이 따로라, ${PREVIEW ? "처음 열면 '예시로 먼저 둘러보기'부터 시작해요" : '처음 설정과 로그인은 아이콘으로 연 앱에서 하세요'}.</p>`
+      : null}
+    <p class="hint">${PREVIEW
+      ? "주황색 아이콘 '미리 보기'가 생겨요. 실제 앱(초록 아이콘)과 기록이 따로라 무엇을 해도 실제 기록은 그대로예요."
+      : "초록색 아이콘 '회독 플래너'가 생겨요. 다음부터는 그 아이콘을 눌러 여세요."}</p>
     <details class="other-dev">
       <summary>다른 기기라면</summary>
       ${Object.keys(INSTALL_STEPS).filter((k) => k !== me).map((k) => html`<div key=${k}><div class="sec-title">${OTHER[k]}</div>${steps(k)}</div>`)}
     </details>
   <//>`;
 }
+
+/** 설정 단추: 로그인이 풀렸거나 오래 못 맞출 때만 작은 점 */
+const SettingsDot = () => (needsAttention() ? html`<i class="att-dot" aria-label="계정 확인 필요"></i>` : null);
 
 const TABS = [
   ['today', '오늘', 'today'],
@@ -111,7 +124,7 @@ function Phone() {
         if (tab === id && ui.stacks[id].length) C.setUI({ stacks: { ...ui.stacks, [id]: [] } });
         else C.go(id);
       }}><${Icon} n=${icon} s=${25} /><span>${label}</span></button>`)}
-      <button onClick=${() => C.openSheet({ type: 'settings' })}><${Icon} n="gear" s=${25} /><span>설정</span></button>
+      <button onClick=${() => C.openSheet({ type: 'settings' })}><span class="ic"><${Icon} n="gear" s=${25} /><${SettingsDot} /></span><span>설정</span></button>
     </nav>
   </div>`;
 }
@@ -150,7 +163,7 @@ function Pad() {
     <aside class="side" aria-label="주요 화면">
       ${TABS.map(([id, label, icon]) => html`<button key=${id} aria-current=${tab === id ? 'page' : 'false'} onClick=${() => C.go(id)}><${Icon} n=${icon} /><span>${label}</span></button>`)}
       <span class="sp"></span>
-      <button onClick=${() => C.openSheet({ type: 'settings' })}><${Icon} n="gear" /><span>설정</span></button>
+      <button onClick=${() => C.openSheet({ type: 'settings' })}><span class="ic"><${Icon} n="gear" /><${SettingsDot} /></span><span>설정</span></button>
     </aside>
     <div class="view pad-view" ref=${view}>${cols}</div>
   </div>`;
@@ -215,7 +228,8 @@ function App() {
   const Sh = sh && SHEETS[sh.type];
   const sk = Sh ? sheetKey(sh) : null;
   const [sheetLayer, toastLayer] = useExits(sk, ui.toast ? ui.toast.id : null);
-  return html`<div class=${`device ${dev} fullscreen${PREVIEW ? ' preview' : ''}`} data-theme=${p.theme} data-mode=${dark ? 'dark' : 'light'} data-size=${p.size} data-density=${p.density} data-hand=${p.hand} data-motion=${M.level()} id="device">
+  useEffect(() => ensureFont(p.font), [p.font]);
+  return html`<div class=${`device ${dev} fullscreen${PREVIEW ? ' preview' : ''}`} data-theme=${p.theme} data-mode=${dark ? 'dark' : 'light'} data-size=${p.size} data-font=${p.font || 'pretendard'} data-density=${p.density} data-hand=${p.hand} data-motion=${M.level()} id="device">
     ${PREVIEW ? html`<${PreviewBar} />` : null}
     <${StorageNote} />
     ${err ? html`<${Crash} err=${err} reset=${reset} />` : !s.data.onboarded ? html`<${Onboarding} />` : dev === 'pad' ? html`<${Pad} />` : html`<${Phone} />`}
@@ -283,7 +297,28 @@ function syncChrome() {
   }
 }
 
+/** 고른 글꼴을 저장소를 열기 전에 먼저 부른다 → 첫 화면부터 그 글꼴 */
+function earlyFont() {
+  try {
+    const dev = JSON.parse(localStorage.getItem(ns('hoedok.device.v1')) || 'null');
+    if (dev && dev.font) ensureFont(dev.font);
+  } catch {
+    /* 무시 */
+  }
+}
+
+/** 로그인 뒤 처음 맞추면 무엇을 받아 왔는지 한 줄로. 처음 화면에서 로그인했으면 기록이 들어온 뒤 창을 닫는다 */
+function onFirstSync(r) {
+  const got = r.pulled || {};
+  const subj = got.subjects || 0, tasks = got.tasks || 0;
+  if (subj || tasks) C.toast(`계정에서 ${[subj ? `과목 ${subj}개` : '', tasks ? `할 일 ${tasks}개` : ''].filter(Boolean).join(' · ')}를 받아 왔어요`);
+  else C.toast('로그인했어요. 이제 이 기기 기록이 계정과 맞춰져요');
+  const sh = C.UI().sheet;
+  if (sh && sh.from === 'ob' && D().onboarded) C.closeSheet();
+}
+
 async function boot() {
+  earlyFont();
   C.setUI({ dev: detectDev() });
   window.addEventListener('resize', () => {
     const d = detectDev();
@@ -313,13 +348,24 @@ async function boot() {
     else C.setUI({});
   });
   setTimeout(() => gcPhotos(D().tasks).catch(() => {}), 4000);
-  // 미리 보기는 동기화하지 않는다 (실제 계정 기록을 건드리지 않게)
-  if (isStorageOk() && !PREVIEW) {
+  // 동기화: 미리 보기도 같은 계정을 쓰되 서버의 기록 공간이 따로다 (src/env.js SPACE)
+  if (isStorageOk()) {
+    let att = false, firstAt = null;
+    syncState.subscribe((s) => {
+      if (s.firstDone && s.firstDone.at !== firstAt) {
+        firstAt = s.firstDone.at;
+        setTimeout(() => onFirstSync(s.firstDone), 300); // 받아 온 기록이 화면에 들어간 뒤에
+      }
+      // 설정이 열려 있거나 설정 단추의 점이 바뀔 때만 새로 그린다
+      const a = needsAttention(s);
+      if (a !== att || (C.UI().sheet && C.UI().sheet.type === 'settings')) C.setUI({});
+      att = a;
+    });
     initSync().catch((e) => console.warn('동기화 시작 실패', e));
-    // 설정이 열려 있으면 동기화 상태 글씨를 새로 그린다
-    syncState.subscribe(() => C.UI().sheet && C.UI().sheet.type === 'settings' && C.setUI({}));
   }
   registerSW();
+  // 홈 화면 앱으로 쓰거나 처음 설정을 마친 기기는 기록을 지우지 말아 달라고 요청
+  if (isStandalone() || D().onboarded) keepStorage();
 }
 
 boot();

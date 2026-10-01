@@ -1,12 +1,12 @@
 // 서비스 워커(인터넷 없이 열기 + 홈 화면 설치). 새 버전이 준비되면 한 줄로 알려 준다.
-import { toast, setUI } from './core.js';
+import { toast, setUI, openSheet } from './core.js';
 import { PREVIEW, ns } from '../env.js';
 
-// ─────────── 미리 보기를 홈 화면에 (앱처럼 열기) ───────────
+// ─────────── 홈 화면에 추가 (앱처럼 열기) ───────────
 // 갤럭시(삼성 인터넷·크롬)는 설치 창을 바로 띄울 수 있다(beforeinstallprompt).
-// 아이폰은 그런 방법이 없어서 공유 › 홈 화면에 추가 안내를 보여 준다.
+// 아이폰은 그런 방법이 없어서 공유 › 홈 화면에 추가 안내를 보여 준다 (main.js InstallSheet).
 let installEvent = null;
-if (PREVIEW && typeof window !== 'undefined') {
+if (typeof window !== 'undefined') {
   window.addEventListener('beforeinstallprompt', (e) => {
     e.preventDefault();
     installEvent = e;
@@ -14,8 +14,20 @@ if (PREVIEW && typeof window !== 'undefined') {
   });
   window.addEventListener('appinstalled', () => {
     installEvent = null;
-    toast("홈 화면에 '미리 보기'를 추가했어요");
+    toast(PREVIEW ? "홈 화면에 '미리 보기'를 추가했어요" : '홈 화면에 추가했어요. 이제 아이콘을 눌러 열어 주세요');
   });
+}
+
+/** 기기가 공간이 모자랄 때도 기록을 지우지 않게 해 달라고 한 번 요청한다 (홈 화면 앱이면 대개 바로 허락됨) */
+export async function keepStorage() {
+  try {
+    const st = typeof navigator !== 'undefined' && navigator.storage;
+    if (!st || !st.persist || !st.persisted) return false;
+    if (await st.persisted()) return true;
+    return await st.persist();
+  } catch {
+    return false;
+  }
 }
 /** 홈 화면 아이콘으로 연 것인가 (주소창 없이) */
 export const isStandalone = () =>
@@ -34,6 +46,30 @@ export async function promptInstall() {
     setUI({});
   }
 }
+/** 홈 화면에 추가하라는 안내를 보여도 되나: 브라우저 창으로 열었을 때만 (미리 보기는 맨 위 주황 줄이 대신한다) */
+export const installable = () => !PREVIEW && !isStandalone();
+/** 설치 창을 바로 띄울 수 있으면 띄우고, 아니면 기기별 안내 */
+export const openInstall = () => (canPrompt() ? promptInstall() : openSheet({ type: 'install' }));
+
+// '홈 화면에 추가' 한 줄을 닫았는지 (이 기기에만)
+const HINT_KEY = ns('hoedok.installHint');
+export function installHintOn() {
+  if (!installable() || platform() === 'desktop') return false;
+  try {
+    return localStorage.getItem(HINT_KEY) !== 'off';
+  } catch {
+    return true;
+  }
+}
+export function hideInstallHint() {
+  try {
+    localStorage.setItem(HINT_KEY, 'off');
+  } catch {
+    /* 저장 공간이 막힌 환경 */
+  }
+  setUI({});
+}
+
 /** 안내에 쓸 기기 종류 */
 export function platform() {
   const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
