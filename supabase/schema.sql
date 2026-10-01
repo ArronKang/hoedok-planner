@@ -3,7 +3,8 @@
 -- 여러 번 실행해도 괜찮다.
 --
 -- 구조: 앱의 모든 기록을 records 표 하나에 둔다.
---   tbl  = 앱 안의 표 이름 (subjects / tasks / exams / semesters / meta / attachments)
+--   tbl  = 앱 안의 표 이름 (subjects / tasks / exams / semesters / meta / attachments / repeats)
+--          표 이름은 글자로 받으므로 앱에 표가 늘어도 이 SQL을 다시 돌릴 필요는 없다
 --   id   = 레코드 id,  data = 레코드 내용(JSON)
 --   client_updated_at = 기기에서 고친 시각(ms). 같은 레코드는 이 값이 더 큰 쪽이 이긴다.
 --   rev  = 서버에서 바뀐 순서. 기기는 "마지막으로 받은 rev 이후"만 받아 간다.

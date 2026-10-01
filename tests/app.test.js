@@ -63,14 +63,17 @@ test('앱: 지문별 — 건너뛴 번호는 한 할 일로 (지문 4, 7)', () =
   C.loadDemo();
   const eng = C.D().subjects.find((s) => s.name === '공통영어');
   const t = C.D().tasks.find((x) => x.subjectId === eng.id && x.date === T() && x.kind === 'track');
-  eq(C.trng(t), '지문 4, 7');
-  eq(C.taskPages(t), 2);
+  // 오늘 몫은 요일마다 공부 시간이 달라 4, 7 뒤에 더 붙기도 한다
+  const units = C.unitsOf(t);
+  eq(units.slice(0, 2), [4, 7]);
+  eq(C.trng(t), '지문 ' + units.join(', '));
+  eq(C.taskPages(t), units.length);
   const st = C.taskStage(t);
   C.partialTask(t.id, 4, 'tomorrow');
   ok(C.isMarked(st, 4) && !C.isMarked(st, 7));
   const rest = C.D().tasks.find((x) => x.subjectId === eng.id && x.date === C.addDays(T(), 1) && x.from === 7 && (x.moves || []).length);
   ok(rest, '남은 지문 7이 내일로');
-  eq(C.trng(rest), '지문 7');
+  eq(C.trng(rest), '지문 ' + units.slice(1).join(', '));
 });
 
 test('앱: 격자 칸을 다 채우면 그 할 일도 끝', () => {
@@ -188,6 +191,131 @@ test('앱: 내신 흐름과 틀린 이유', () => {
   eq(C.wrongText(fin.wrong['공통국어']), '개념 1 · 실수 1 · 안 한 범위 3');
   const m9 = C.D().pastExams.find((e) => e.id === 'ex-m9');
   eq(C.wrongText(m9.wrong['공통수학']), '실수 1 · 시간 부족 2 · 처음 보는 유형 1');
+});
+
+// ─── 반복하는 할 일 ───
+const ALL = [0, 1, 2, 3, 4, 5, 6];
+const freeToday = () => C.tasksOn(T()).find((t) => t.kind === 'free' && !t.rep && t.title === '수행평가 보고서 개요 쓰기');
+const repsOf = (rid) => C.D().tasks.filter((t) => t.rep === rid);
+
+test('반복: 매일로 켜면 오늘부터 2주가 채워지고, 다시 채워도 늘지 않는다', () => {
+  C.loadDemo();
+  const id = C.setRepeat(freeToday().id, ALL);
+  const t = C.D().tasks.find((x) => x.id === id);
+  const r = C.repeatById(t.rep);
+  eq(id, `${r.id}.${T()}`, '번호 = 규칙번호.날짜');
+  eq(repsOf(r.id).length, C.REPEAT_AHEAD);
+  eq(C.fillRepeats(), 0);
+  ok(repsOf(r.id).every((x) => x.title === '수행평가 보고서 개요 쓰기' && x.est === 40 && x.pri === 3));
+  ok(!repsOf(r.id).some((x) => x.id !== id && x.due), '마감일은 그날 것만');
+  eq(C.daysText(r.days), '매일');
+});
+
+test('반복: 하루를 지우면 그날만 빠지고 다시 생기지 않는다', () => {
+  C.loadDemo();
+  const id = C.setRepeat(freeToday().id, ALL);
+  const rid = C.D().tasks.find((x) => x.id === id).rep;
+  const d = C.addDays(T(), 3);
+  C.deleteTask(`${rid}.${d}`);
+  eq(C.fillRepeats(), 0);
+  ok(!C.tasksOn(d).some((x) => x.rep === rid));
+});
+
+test('반복: 요일을 바꾸면 안 맞는 앞날 것은 치운다', () => {
+  C.loadDemo();
+  const id = C.setRepeat(freeToday().id, ALL);
+  const rid = C.D().tasks.find((x) => x.id === id).rep;
+  C.setRepeat(id, [1, 3, 5]);
+  const fut = repsOf(rid).filter((x) => x.date > T());
+  ok(fut.length > 0 && fut.every((x) => [1, 3, 5].includes(C.weekday(x.date))));
+  eq(C.daysText(C.repeatById(rid).days), '월·수·금');
+  ok(C.D().tasks.some((x) => x.id === id), '오늘 것은 남음');
+});
+
+test('반복: 이름·시간을 바꾸면 그 뒤 반복에도, 메모는 그날만', () => {
+  C.loadDemo();
+  const id = C.setRepeat(freeToday().id, ALL);
+  const t = C.D().tasks.find((x) => x.id === id);
+  const later = C.D().tasks.find((x) => x.id === `${t.rep}.${C.addDays(T(), 5)}`);
+  C.editTask(later, 'title', '보고서 쓰기');
+  C.editTask(later, 'memo', '3쪽까지');
+  eq(t.title, '수행평가 보고서 개요 쓰기', '앞 날짜는 그대로');
+  eq(C.D().tasks.find((x) => x.id === `${t.rep}.${C.addDays(T(), 6)}`).title, '보고서 쓰기');
+  eq(C.D().tasks.find((x) => x.id === `${t.rep}.${C.addDays(T(), 6)}`).memo, undefined);
+  C.fillRepeats(C.D(), C.addDays(T(), 13));
+  eq(C.D().tasks.find((x) => x.id === `${t.rep}.${C.addDays(T(), 20)}`).title, '보고서 쓰기', '새로 채우는 것도 바뀐 이름');
+});
+
+test('반복: 그만하면 내일부터 치우고, 오늘 것과 지난 기록은 남는다', () => {
+  C.loadDemo();
+  const id = C.setRepeat(freeToday().id, ALL);
+  const rid = C.D().tasks.find((x) => x.id === id).rep;
+  C.stopRepeat(rid);
+  eq(C.repeatById(rid), null);
+  eq(repsOf(rid).map((x) => x.date), [T()]);
+  eq(C.fillRepeats(), 0);
+});
+
+test('반복: 지난 날 못 한 반복은 밀리지 않는다 (못 끝낸 일 알림에 없음)', () => {
+  C.loadDemo();
+  const rid = 'rep-demo';
+  C.repeatById(rid).days = ALL;
+  C.fillRepeats(C.D(), C.addDays(T(), -3));
+  const past = C.D().tasks.filter((x) => x.rep === rid && x.date < T());
+  eq(past.length, 3);
+  ok(!C.overdue().some((x) => x.rep));
+  const w = C.weekStats();
+  ok(w.missed >= 3, '돌아보기에는 못 한 일로 남음');
+});
+
+// ─── 나누기 / 마감 / 기간 ───
+
+test('나누기: 직접 넣은 일로 꽉 찬 날에는 진도를 안 넣고, 합계는 그대로', () => {
+  C.loadDemo();
+  const d = C.addDays(T(), 4);
+  C.D().tasks.push({ id: 'big', kind: 'free', date: d, subjectId: C.D().subjects[0].id, title: '종일 학교 행사 준비', status: 'todo', moves: [], est: C.capacity(d) });
+  C.planAll(T());
+  ok(!C.D().tasks.some((t) => t.date === d && t.kind === 'track' && !t.manual && !t.hist && t.status === 'todo'));
+  eq(remainingEqualsPlanned(), []);
+});
+
+test('나누기: 반복하는 일 시간도 먼저 뺀다 (아직 할 일로 안 만든 날 포함)', () => {
+  C.loadDemo();
+  C.D().tasks = C.D().tasks.filter((t) => t.rep !== 'rep-demo');
+  // 그 요일만 꽉 채운다 (매일로 채우면 시간이 가장 긴 요일이 걸린 날 모든 날이 꽉 차 원래 시간대로 나눈다)
+  let far = C.addDays(T(), 9);
+  while (!C.capacity(far)) far = C.addDays(far, 1);
+  const r = C.repeatById('rep-demo');
+  r.days = [C.weekday(far)];
+  r.est = C.capacity(far) + 30;
+  eq(C.fixedMinutes(far) >= C.capacity(far), true);
+  C.planAll(T());
+  ok(!C.D().tasks.some((t) => t.date === far && t.kind === 'track' && !t.hist && t.status === 'todo'));
+  eq(remainingEqualsPlanned(), []);
+});
+
+test('마감이 가까운 일: 다른 날로 잡아 둔 일만', () => {
+  C.loadDemo();
+  eq(C.dueSoon().map((t) => t.title), ['실험 보고서 마무리']);
+  const t = C.dueSoon()[0];
+  C.moveTask(t.id, T());
+  eq(C.dueSoon().length, 0, '오늘 목록에 있으면 안 뜸');
+});
+
+test('돌아보기: 시험 준비 전체 기간', () => {
+  C.loadDemo();
+  const all = C.periodStats(C.D().exam.start, T());
+  eq(all.days.length, C.diffDays(C.D().exam.start, T()) + 1);
+  ok(all.planned >= C.weekStats().planned);
+});
+
+test('시험 정리: 시험 뒤로 잡아 둔 직접 넣은 일은 다음 시험으로', () => {
+  C.loadDemo();
+  const ex = C.D().exam;
+  ex.date = T();
+  const t = C.D().tasks.find((x) => x.title === '실험 보고서 마무리');
+  C.closeExam();
+  eq(t.examId, null);
 });
 
 test('앱: 아직 점수가 안 나온 비중 (통합사회 70%)', () => {

@@ -5,10 +5,11 @@
 // - 화면 설정(디자인·글자 등)은 이 기기의 localStorage에만 둔다.
 import * as db from '../data/db.js';
 import * as C from './core.js';
+import { ns } from '../env.js';
 
-const DEVICE_KEY = 'hoedok.device.v1';
+const DEVICE_KEY = ns('hoedok.device.v1');
 /** 자료 안의 목록 → 저장소 표 이름 */
-const TABLE = { subjects: 'subjects', tasks: 'tasks', pastExams: 'exams', semesters: 'semesters' };
+const TABLE = { subjects: 'subjects', tasks: 'tasks', pastExams: 'exams', semesters: 'semesters', repeats: 'repeats' };
 const KEYS = Object.keys(TABLE);
 
 const saved = Object.fromEntries(KEYS.map((k) => [k, new Map()])); // id → 마지막으로 저장한 JSON
@@ -52,6 +53,7 @@ function readAll() {
     tasks: [...db.all('tasks')].sort(byCreated).map((r) => fromRec('tasks', r)),
     pastExams: [...db.all('exams')].sort(byCreated).map((r) => fromRec('pastExams', r)),
     semesters: [...db.all('semesters')].sort((a, b) => (a.id < b.id ? -1 : 1)).map((r) => fromRec('semesters', r)),
+    repeats: [...db.all('repeats')].sort(byCreated).map((r) => fromRec('repeats', r)),
   };
 }
 
@@ -112,9 +114,11 @@ export function persistNow() {
       if (!o || !o.id) return;
       seen.add(o.id);
       const j = JSON.stringify(toRec(key, o, i));
-      if (sv.get(o.id) === j) return;
+      const had = sv.get(o.id);
+      if (had === j) return;
       sv.set(o.id, j);
-      db.put(t, JSON.parse(j));
+      // 앱이 저절로 만든 반복 할 일은 처음 저장할 때 '가장 오래된 시각'으로 → 다른 기기에서 고친 기록이 이긴다
+      db.put(t, JSON.parse(j), { weak: had === undefined && !!o.gen });
     });
     for (const id of [...sv.keys()])
       if (!seen.has(id)) {
@@ -193,5 +197,6 @@ function onDb(changed) {
   }
   if (!dirty) return;
   if (remoteTasks.size) C.reconcile(remoteTasks);
+  if (changed.has('repeats')) C.fillRepeats(); // 다른 기기에서 온 반복 규칙 → 이 기기에도 앞으로 2주를 채운다
   C.commit();
 }

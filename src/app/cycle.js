@@ -41,7 +41,7 @@ export function CycleSheet({ step: first }) {
       setNext(C.nextGuess()); // 방금 끝낸 시험을 보고 다음을 짐작
       setStep('next');
     };
-    return html`<${Sheet} title=${`${ex.name} 결과`} tall footer=${html`<button class="btn" onClick=${() => close(false)}>점수는 나중에</button><button class="btn pri" onClick=${() => close(true)}>저장하고 다음</button>`}>
+    return html`<${Sheet} step=${step} title=${`${ex.name} 결과`} tall footer=${html`<button class="btn" onClick=${() => close(false)}>점수는 나중에</button><button class="btn pri" onClick=${() => close(true)}>저장하고 다음</button>`}>
       <${Steps} n=${idx} of=${total} />
       <p class="sub" style="margin:0 0 14px">${mock ? '과목마다 원점수·백분위·등급을 적어 주세요.' : '과목마다 받은 점수를 적어 주세요. 과목 성적 계산에도 바로 들어가요.'} 모르는 건 비워 두고 나중에 성적 탭에서 적어도 돼요.</p>
       ${mock
@@ -69,7 +69,7 @@ export function CycleSheet({ step: first }) {
 
   // ── 1. 끝낼 날 정리 ──
   if (step === 'close' && ex) {
-    return html`<${Sheet} title=${`${ex.name} 정리`} footer=${html`<button class="btn" onClick=${closeSheet}>아직 아니에요</button><button class="btn pri" onClick=${() => {
+    return html`<${Sheet} step=${step} title=${`${ex.name} 정리`} footer=${html`<button class="btn" onClick=${closeSheet}>아직 아니에요</button><button class="btn pri" onClick=${() => {
       withUndo(`${ex.name} 정리했어요`, () => C.closeExam());
       setNext(C.nextGuess());
       setStep('next');
@@ -86,7 +86,7 @@ export function CycleSheet({ step: first }) {
     const pickName = (n) => setNext({ ...next, name: n, kind: C.kindOfName(n) });
     const ok = next.date > today() && (!goal || goalName.trim());
     const hasBooks = D().subjects.some((s) => s.books.length);
-    return html`<${Sheet} title="다음 준비" tall footer=${html`<button class="btn" onClick=${closeSheet}>나중에 정하기</button><button class="btn pri" disabled=${!ok} onClick=${() => {
+    return html`<${Sheet} step=${step} title="다음 준비" tall footer=${html`<button class="btn" onClick=${closeSheet}>나중에 정하기</button><button class="btn pri" disabled=${!ok} onClick=${() => {
       const n = goal ? { ...next, name: goalName.trim() } : next;
       setNext(n);
       if (hasBooks) {
@@ -118,7 +118,7 @@ export function CycleSheet({ step: first }) {
 
   // ── 3. 범위 ──
   if (step === 'scope') {
-    return html`<${Sheet} title="이번 범위" tall footer=${html`<button class="btn" onClick=${() => setStep('next')}>이전</button><button class="btn pri" onClick=${() => {
+    return html`<${Sheet} step=${step} title="이번 범위" tall footer=${html`<button class="btn" onClick=${() => setStep('next')}>이전</button><button class="btn pri" onClick=${() => {
       C.startNext(next);
       commit();
       setStep('start');
@@ -143,7 +143,7 @@ export function CycleSheet({ step: first }) {
     setUI({ sheet: null, tab: 'today', day: null });
     toast(plan ? `${days.length}일치 할 일을 넣었어요` : `${cur ? cur.name : '다음 시험'} 준비를 시작해요`);
   };
-  return html`<${Sheet} title=${cur ? cur.name : '시작'} tall footer=${html`<button class="btn" onClick=${() => finish(false)}>나누지 않고 시작</button><button class="btn pri" disabled=${!tasks.length} onClick=${() => finish(true)}>나눠서 시작</button>`}>
+  return html`<${Sheet} step=${step} title=${cur ? cur.name : '시작'} tall footer=${html`<button class="btn" onClick=${() => finish(false)}>나누지 않고 시작</button><button class="btn pri" disabled=${!tasks.length} onClick=${() => finish(true)}>나눠서 시작</button>`}>
     <${Steps} n=${idx} of=${total} />
     <p class="sub" style="margin:0 0 14px">${cur ? `남은 분량을 ${mdws(C.lastPlanDay(cur))}까지 날마다 나눠요.` : ''}</p>
     <div class="plan-sum">

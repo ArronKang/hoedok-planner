@@ -1,0 +1,19 @@
+{
+  "name": "회독 플래너 미리 보기",
+  "short_name": "미리 보기",
+  "description": "올리기 전에 수정본을 먼저 써 보는 미리 보기. 실제 앱과 기록이 따로예요.",
+  "lang": "ko",
+  "dir": "ltr",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f1e8",
+  "theme_color": "#b8552b",
+  "icons": [
+    { "src": "icons/preview-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/preview-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/preview-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

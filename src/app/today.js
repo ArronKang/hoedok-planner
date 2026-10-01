@@ -81,7 +81,7 @@ function Summary({ list, day }) {
       <div class="sumbar" aria-hidden="true"><i style=${{ width: `${live.length ? (doneN / live.length) * 100 : 0}%` }}></i></div>
     </button>
     ${open
-      ? html`<div class="sumdetail">
+      ? html`<div class="sumdetail appear">
           ${bySub.map(([s, l]) => html`<div class="r hue" key=${s.id} style=${hue(s.h)}><span class="dot"></span><span>${s.name}</span><span class="num">${l.filter((t) => t.status === 'done').length}/${l.length}개 · ${C.amount(s, l.reduce((a, t) => a + taskPages(t), 0))}</span></div>`)}
           <div style="margin-top:10px" class="row"><span class="sub">예상 시간</span><span class="num" style="margin-left:auto">${minutes(mins)}</span><span class="muted">/ 공부 가능 ${cap ? minutes(cap) : '없음'}</span></div>
           ${cap ? html`<div class="capbar"><i style=${{ width: `${Math.min(100, (mins / Math.max(mins, cap)) * 100)}%` }}></i><b style=${{ left: `${(cap / Math.max(mins, cap)) * 100}%` }}></b></div>` : null}
@@ -118,6 +118,11 @@ function Banners({ day }) {
   else if (!ex && D().subjects.length)
     out.push(html`<button class="banner key" key="nx" onClick=${() => openSheet({ type: 'cycle', step: 'next' })}>
       <span>다음 시험이나 끝낼 날을 정하면 날마다 할 양을 나눠 드려요</span><span class="go">정하기</span>
+    </button>`);
+  const ds = C.dueSoon();
+  if (ds.length && p.show.due !== false)
+    out.push(html`<button class="banner" key="due" onClick=${() => openSheet({ type: 'due' })}>
+      <span>다가오는 마감 · <b>${titleOf(ds[0])}</b> <span class="num">${md(ds[0].due)}</span>${ds.length > 1 ? ` 외 ${ds.length - 1}개` : ''}</span><span class="go">보기</span>
     </button>`);
   const od = overdue();
   if (od.length && p.show.overdue)
@@ -195,6 +200,7 @@ export function TodayMenu() {
       ${D().exam ? row('남은 계획 다시 나누기', `밀린 게 많을 때 ${C.endWord()}까지 새로 나눠요`, () => openSheet({ type: 'plan' })) : row('다음 시험 정하기', '시험이나 끝낼 날을 정하면 날마다 할 양을 나눠요', () => openSheet({ type: 'cycle', step: 'next' }))}
       ${row('이번 주 돌아보기', '계획한 것과 한 것', () => openSheet({ type: 'week' }))}
       ${row('달력', '다른 날 보기', () => openSheet({ type: 'calendar' }))}
+      ${(D().repeats || []).length ? row('반복하는 일', `${D().repeats.length}개 · 매일이나 요일마다 저절로 넣는 일`, () => openSheet({ type: 'repeats' })) : null}
     </div></div>
     <button class="linkrow-btn" onClick=${() => openSheet({ type: 'settings', page: 'views' })}>오늘 화면에 보일 것 고르기 ›</button>
   <//>`;
@@ -215,14 +221,16 @@ export function TaskSheet({ id }) {
   const psg = C.isPsg(sub);
   const U = C.unitOf(sub);
   const reps = t.reps > 1 ? t.reps : 0;
+  const rule = t.rep && C.repeatById(t.rep);
+  // 반복하는 일이면 이름·시간 등은 그 뒤 반복에도 같이 바뀐다 (core.editTask)
   const set = (k, v) => {
-    t[k] = v;
+    C.editTask(t, k, v);
     commit();
   };
 
   let actions;
   if (mode === 'partial' && st) {
-    actions = html`<div class="hue" style=${hue(sub.h)}>
+    actions = html`<div class="hue appear" style=${hue(sub.h)}>
       <p class="sub" style="margin:0 0 4px;text-align:center">${C.trng(t)} 중 ${psg ? '몇 번 지문까지' : '어디까지'} 했어요?</p>
       <div class="upto"><input class="input big" inputmode="numeric" value=${String(val)} onInput=${(e) => setUpto(C.clamp(parseInt(e.target.value) || t.from - 1, t.from - 1, t.to))} aria-label=${psg ? '몇 번 지문까지' : '몇 쪽까지'} />${psg ? '번까지' : '쪽까지'}</div>
       <input class="range" type="range" min=${t.from - 1} max=${t.to} value=${val} onInput=${(e) => setUpto(+e.target.value)} aria-label=${psg ? '몇 번 지문까지' : '몇 쪽까지'} />
@@ -279,22 +287,25 @@ export function TaskSheet({ id }) {
       <div style="margin:16px 0 14px">${actions}</div>
       ${t.kind === 'track' && sub ? html`<div class="kv"><span class="k">진도</span><button class="v" onClick=${() => C.push('progress', { view: 'subject', id: sub.id }, true)}>${sub.name} ${P(C.pct(sub))} ›</button></div>` : null}
       <div class="kv"><span class="k">날짜</span><span class="v">${mdws(t.date)}${t.at ? ` · ${t.at}` : ''}</span></div>
+      ${rule ? html`<div class="kv"><span class="k">반복</span><span class="v">${C.daysText(rule.days)}</span></div>` : null}
+      ${t.due ? html`<div class="kv"><span class="k">마감</span><span class="v">${mdws(t.due)}${t.status === 'todo' ? ` · ${dueLeft(t.due)}` : ''}</span></div>` : null}
       ${reps ? html`<div class="kv"><span class="k">한 횟수</span><span class="v">${t.status === 'done' ? reps : t.repDone || 0} / ${reps}번 ${(t.repDone || 0) > 0 && t.status === 'todo' ? html`<button class="linkbtn" onClick=${() => set('repDone', t.repDone - 1)}>하나 빼기</button>` : null}</span></div>` : null}
       ${(t.moves || []).length ? html`<div class="kv"><span class="k">미룬 기록</span><span class="v">${t.moves.map((m) => `${md(m.from)}→${md(m.to)}${m.reason ? ` (${m.reason})` : ''}`).join(', ')}</span></div>` : null}
       ${t.memo && !more ? html`<p class="memo">${t.memo}</p>` : null}
       ${(t.photos || []).length ? html`<div style="margin-top:12px"><${Photos} t=${t} /></div>` : null}
       <button class="more-toggle" onClick=${() => setUI({ open: { ...UI().open, taskMore: !more } })} aria-expanded=${more ? 'true' : 'false'}>더 보기<span class="caret">${more ? '▴' : '▾'}</span></button>
       ${more
-        ? html`<div>
+        ? html`<div class="appear">
             <span class="label">중요도</span>
             <${Seg} label="중요도" value=${t.pri || 0} onChange=${(v) => set('pri', v || null)} options=${[[0, '없음'], [1, '!'], [2, '!!'], [3, '!!!']]} />
             ${t.kind === 'free'
-              ? html`<span class="label">몇 번 할까요 <span class="muted" style="font-weight:500">— 여러 번이면 누를 때마다 하나씩 채워져요</span></span>
-                  <${Stepper} label="반복 횟수" value=${t.reps || 1} step=${1} min=${1} max=${10} fmtv=${(v) => (v === 1 ? '한 번' : `${v}번`)} onChange=${(v) => {
-                    t.reps = v > 1 ? v : null;
+              ? html`<span class="label">하루에 몇 번 <span class="muted" style="font-weight:500">— 여러 번이면 누를 때마다 하나씩 채워져요</span></span>
+                  <${Stepper} label="하루에 할 횟수" value=${t.reps || 1} step=${1} min=${1} max=${10} fmtv=${(v) => (v === 1 ? '한 번' : `${v}번`)} onChange=${(v) => {
+                    C.editTask(t, 'reps', v > 1 ? v : null);
                     t.repDone = Math.min(t.repDone || 0, Math.max(0, v - 1));
                     commit();
-                  }} />`
+                  }} />
+                  <${RepeatPick} t=${t} rule=${rule} />`
               : null}
             <span class="label">시작 시각 <span class="muted" style="font-weight:500">— 시간순으로 볼 때 써요</span></span>
             <div class="row">
@@ -309,12 +320,95 @@ export function TaskSheet({ id }) {
             <textarea class="input" rows="3" key=${'memo' + t.id} defaultValue=${t.memo || ''} placeholder="예: 준비물, 범위" onChange=${(e) => set('memo', e.target.value)}></textarea>
             ${(t.photos || []).length ? null : html`<span class="label">사진 <span class="muted" style="font-weight:500">— 예: 수행평가 안내문. 이 기기에만 저장돼요</span></span><${Photos} t=${t} />`}
             <div style="margin-top:18px"><button class="btn danger block" onClick=${() => {
-              withUndo('삭제했어요', () => C.deleteTask(t.id));
+              withUndo(rule ? '이날 것만 뺐어요' : '삭제했어요', () => C.deleteTask(t.id));
               closeSheet();
-            }}>이 할 일 삭제</button></div>
+            }}>${rule ? '이날 것만 삭제' : '이 할 일 삭제'}</button></div>
           </div>`
         : null}
     </div>
+  <//>`;
+}
+
+const ALLDAYS = [0, 1, 2, 3, 4, 5, 6];
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0];
+
+/** '3일 남음' / '오늘 마감' / '2일 지남' — 사실만 */
+const dueLeft = (due) => {
+  const n = diffDays(today(), due);
+  return n > 0 ? `${n}일 남음` : n === 0 ? '오늘 마감' : `${-n}일 지남`;
+};
+
+/** 반복: 안 함 / 매일 / 요일마다. 켜면 앞으로 2주씩 저절로 넣는다 */
+function RepeatPick({ t, rule }) {
+  const days = rule ? rule.days : [];
+  const mode = !rule ? 'none' : days.length === 7 ? 'daily' : 'week';
+  const apply = (ds) => {
+    const had = !!rule;
+    const old = t.id; // 처음 켜면 할 일 번호가 '규칙번호.날짜'로 바뀐다 → 시트를 새 번호로 다시 연다
+    const id = C.setRepeat(old, ds);
+    commit();
+    if (id !== old) openSheet({ type: 'task', id });
+    if (!had) toast(`${C.daysText(ds)}${ds.length === 7 ? '' : '요일마다'} 반복해요. 앞으로 2주를 넣어 뒀어요`);
+  };
+  const pick = (v) => {
+    if (v === mode) return;
+    if (v === 'none') return withUndo('반복을 그만했어요', () => C.stopRepeat(rule.id, t.id));
+    apply(v === 'daily' ? ALLDAYS : days.length && days.length < 7 ? days : [C.weekday(t.date)]);
+  };
+  return html`<div>
+    <span class="label">반복 <span class="muted" style="font-weight:500">— 매일이나 요일마다 저절로 넣어요</span></span>
+    <${Seg} label="반복" value=${mode} onChange=${pick} options=${[['none', '안 함'], ['daily', '매일'], ['week', '요일마다']]} />
+    ${mode === 'week'
+      ? html`<div class="chips appear" style="margin-top:8px">${WEEK_ORDER.map((w) => html`<button key=${w} class="chip" style="min-height:36px;padding:0 12px" aria-pressed=${days.includes(w) ? 'true' : 'false'} aria-label=${C.WD[w] + '요일'} onClick=${() => {
+          const ds = days.includes(w) ? days.filter((x) => x !== w) : [...days, w];
+          if (ds.length) apply(ds);
+        }}>${C.WD[w]}</button>`)}</div>`
+      : null}
+    ${rule ? html`<p class="hint" style="margin-bottom:0">이름·예상 시간·중요도·시작 시각·횟수를 바꾸면 다음 반복에도 반영돼요. 메모·사진·마감일은 이날 것만.</p>` : null}
+  </div>`;
+}
+
+/** 다가오는 마감: 다른 날로 잡아 둔 일 중 마감이 3일 안인 것 */
+export function DueSheet() {
+  const list = C.dueSoon();
+  const td = today();
+  return html`<${Sheet} title="다가오는 마감">
+    <p class="sub" style="margin:0 0 4px">마감이 ${C.DUE_SOON}일 안인데 다른 날로 잡아 둔 일이에요.</p>
+    ${!list.length ? html`<div class="empty"><h3>가까운 마감이 없어요</h3></div>` : null}
+    ${list.map((t) => {
+      const sub = subById(t.subjectId);
+      return html`<div class="eod-item hue" key=${t.id} style=${hue(sub ? sub.h : 0)}>
+        <div class="hd"><span class="dot"></span><b>${titleOf(t)}</b><small>${sub ? sub.name : ''}</small></div>
+        <div class="due-facts"><span>마감 <b>${mdws(t.due)}</b> · ${dueLeft(t.due)}</span><span>할 날 ${mdws(t.date)}</span></div>
+        <div class="btns">
+          <button class="btn sm pri" onClick=${() => withUndo('오늘로 옮겼어요', () => C.moveTask(t.id, td))}>오늘 하기</button>
+          <button class="btn sm" onClick=${() => openSheet({ type: 'task', id: t.id })}>자세히</button>
+        </div>
+      </div>`;
+    })}
+  <//>`;
+}
+
+/** 반복하는 일 모아 보기 */
+export function RepeatsSheet() {
+  const list = D().repeats || [];
+  const td = today();
+  return html`<${Sheet} title="반복하는 일">
+    ${!list.length ? html`<div class="empty"><h3>반복하는 일이 없어요</h3><p>할 일 › 더 보기 › 반복에서 켜면 여기 모여요.</p></div>` : null}
+    ${list.length
+      ? html`<div class="set-list">${list.map((r) => {
+          const sub = subById(r.subjectId);
+          const next = D().tasks.filter((x) => x.rep === r.id && x.date >= td).sort((a, b) => (a.date < b.date ? -1 : 1))[0];
+          return html`<div class="set-row hue" key=${r.id} style=${hue(sub ? sub.h : 0)}>
+            <span class="dot"></span>
+            <button class="l plain" disabled=${!next} onClick=${() => next && openSheet({ type: 'task', id: next.id })}>
+              <b>${r.title}</b><small>${sub ? sub.name : '(없는 과목)'} · ${C.daysText(r.days)}${r.est ? ` · ${minutes(r.est)}` : ''}${next ? ` · 다음 ${next.date === td ? '오늘' : md(next.date)}` : ''}</small>
+            </button>
+            <button class="btn sm quiet" onClick=${() => withUndo(`'${r.title}' 반복을 그만했어요`, () => C.stopRepeat(r.id))}>그만하기</button>
+          </div>`;
+        })}</div>
+        <p class="hint">이름을 누르면 다음 반복이 열려요. 거기서 이름·요일·시간을 바꿀 수 있어요. 그만해도 지난 기록은 남아요.</p>`
+      : null}
   <//>`;
 }
 
@@ -430,7 +524,10 @@ export function AddSheet() {
 export function EndDaySheet({ past }) {
   const td = today();
   const day = past ? td : viewDay();
-  const [snap] = useState(() => D().tasks.filter((t) => t.status === 'todo' && !t.closed && (past ? t.date < td : t.date <= day)).map((t) => t.id));
+  const inDay = (t) => t.status === 'todo' && !t.closed && (past ? t.date < td : t.date <= day);
+  // 반복하는 일은 밀리지 않는다 → 정리할 목록에서 뺀다
+  const [snap] = useState(() => D().tasks.filter((t) => inDay(t) && !t.rep).map((t) => t.id));
+  const [repN] = useState(() => (past ? 0 : D().tasks.filter((t) => inDay(t) && t.rep && t.date === day).length));
   const [handled, setHandled] = useState({});
   const items = snap.map((id) => D().tasks.find((t) => t.id === id)).filter(Boolean);
   const target = past ? td : addDays(td, 1);
@@ -458,13 +555,14 @@ export function EndDaySheet({ past }) {
         }}>남은 ${left.length}개 모두 ${past ? '오늘로' : '내일로'}</button>`
       : null}
     ${!items.length ? html`<div class="empty"><h3>남은 일이 없어요</h3></div>` : null}
+    ${repN ? html`<p class="hint" style="margin:0 0 6px">못 한 반복하는 일 ${repN}개는 옮기지 않고 이날 기록으로 남겨요.</p>` : null}
     ${items.map((t) => {
       const sub = subById(t.subjectId);
       const h = handled[t.id];
       return html`<div class="eod-item hue" key=${t.id} style=${hue(sub ? sub.h : 0)}>
         <div class="hd"><span class="dot"></span><b>${titleOf(t)}</b><small>${sub ? sub.name : ''} · ${md(snapDate(t, h))}</small></div>
         ${h
-          ? html`<div class="reasons">
+          ? html`<div class="reasons appear">
               <span class="small muted">${h.kind === 'move' ? `${mdws(target)}(으)로 옮겼어요` : '안 하기로 했어요'} · 이유 (선택)</span>
               <div class="chips" style="margin-top:6px">${C.MOVE_REASONS.map((r) => html`<button key=${r} class="chip" aria-pressed=${h.reason === r ? 'true' : 'false'} onClick=${() => {
                 C.setReason(t.id, h.reason === r ? null : r);
@@ -499,6 +597,7 @@ export function CalendarSheet({ pickFor, back, inline }) {
     setMonth(`${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}`);
   };
   const ex = D().exam;
+  const dues = new Set(D().tasks.filter((t) => t.status === 'todo' && t.due).map((t) => t.due));
   const choose = (d) => {
     if (pickFor) {
       withUndo(`${mdws(d)}(으)로 옮겼어요`, () => C.moveTask(pickFor, d));
@@ -514,19 +613,19 @@ export function CalendarSheet({ pickFor, back, inline }) {
       <button class="ib" aria-label="이전 달" onClick=${() => shift(-1)}><${Icon} n="left" /></button>
       <button class="ib" aria-label="다음 달" onClick=${() => shift(1)}><${Icon} n="right" /></button>
     </div>
-    <div class="cal">
+    <div class="cal appear" key=${month}>
       ${C.WD.map((w, i) => html`<div key=${w} class=${'wd' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>${w}</div>`)}
       ${weeks.map((d) => {
         const l = tasksOn(d).filter((t) => t.status !== 'dropped');
         const wd = C.weekday(d);
-        return html`<button key=${d} class=${`d${d.slice(0, 7) !== month ? ' other' : ''}${d === td ? ' today' : ''}${d === viewDay() && !pickFor ? ' sel' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}`} onClick=${() => choose(d)} aria-label=${`${mdws(d)} 할 일 ${l.length}개`}>
+        return html`<button key=${d} class=${`d${d.slice(0, 7) !== month ? ' other' : ''}${d === td ? ' today' : ''}${d === viewDay() && !pickFor ? ' sel' : ''}${wd === 0 ? ' sun' : wd === 6 ? ' sat' : ''}`} onClick=${() => choose(d)} aria-label=${`${mdws(d)} 할 일 ${l.length}개${dues.has(d) ? ', 마감 있음' : ''}`}>
           <span class="n">${+d.slice(8)}</span>
           <span class="dots">${l.slice(0, 6).map((t) => html`<i key=${t.id} class=${'hue' + (t.status === 'done' ? ' on' : '')} style=${hue(subById(t.subjectId)?.h || 0)}></i>`)}</span>
-          ${ex && ex.date === d ? html`<span class="ex">${C.isGoal(ex) ? '끝' : '시험'}</span>` : null}
+          ${ex && ex.date === d ? html`<span class="ex">${C.isGoal(ex) ? '끝' : '시험'}</span>` : dues.has(d) ? html`<span class="ex due">마감</span>` : null}
         </button>`;
       })}
     </div>
-    <p class="hint">점 하나가 할 일 하나예요. 채워진 점은 끝낸 일.</p>
+    <p class="hint">점 하나가 할 일 하나예요. 채워진 점은 끝낸 일.${dues.size ? ' 마감은 안 끝낸 일의 마감일이에요.' : ''}</p>
   </div>`;
   if (inline) return body;
   return html`<${Sheet} title=${pickFor ? '옮길 날짜' : '달력'}>${body}<//>`;
@@ -534,8 +633,14 @@ export function CalendarSheet({ pickFor, back, inline }) {
 
 export function WeekSheet() {
   const [back, setBack] = useState(0); // 몇 주 전
-  const end = addDays(today(), -7 * back);
-  const w = C.weekStats(end);
+  const [range, setRange] = useState('week'); // 'week' | 'exam' (시험 준비를 시작한 날부터 오늘까지)
+  const ex = D().exam;
+  const td = today();
+  // 시험 준비가 한 주보다 길 때만 '전체'를 고를 수 있다
+  const canAll = !!(ex && ex.start && ex.start < addDays(td, -6));
+  const all = canAll && range === 'exam';
+  const end = addDays(td, -7 * back);
+  const w = all ? C.periodStats(ex.start, td) : C.weekStats(end);
   const rate = w.planned ? w.done / w.planned : null;
   const mx = Math.max(1, ...w.days.map((d) => d.pages));
   const reasons = Object.entries(w.reasons).sort((a, b) => b[1] - a[1]);
@@ -543,12 +648,17 @@ export function WeekSheet() {
   const sum = C.mix(D().subjects.map((s) => [s, w.days.reduce((a, d) => a + ((s.log || {})[d.d] || 0), 0)]));
   const tm = w.time;
   const hasOlder = D().tasks.some((t) => t.date < addDays(end, -6));
-  return html`<${Sheet} title=${back ? `${back}주 전 돌아보기` : '이번 주 돌아보기'} tall>
-    <div class="weeknav">
-      <button class="ib" aria-label="지난주" disabled=${!hasOlder} onClick=${() => setBack(back + 1)}><${Icon} n="left" /></button>
-      <span class="sub">${md(w.from)}–${md(w.end)} · 계획한 것과 실제로 한 것</span>
-      <button class="ib" aria-label="다음 주" disabled=${!back} onClick=${() => setBack(back - 1)}><${Icon} n="right" /></button>
-    </div>
+  const many = w.days.length > 7;
+  return html`<${Sheet} title=${all ? `${ex.name.replace(/^\d학기 /, '')} 준비 돌아보기` : back ? `${back}주 전 돌아보기` : '이번 주 돌아보기'} tall>
+    ${canAll ? html`<div style="margin-bottom:10px"><${Seg} label="기간" value=${range} onChange=${(v) => { setRange(v); setBack(0); }} options=${[['week', '한 주씩'], ['exam', '시험 준비 전체']]} /></div>` : null}
+    ${all
+      ? html`<p class="sub" style="margin:0 0 12px;text-align:center">${md(w.from)}–${md(w.end)} · ${w.days.length}일 · 계획한 것과 실제로 한 것</p>`
+      : html`<div class="weeknav">
+          <button class="ib" aria-label="지난주" disabled=${!hasOlder} onClick=${() => setBack(back + 1)}><${Icon} n="left" /></button>
+          <span class="sub">${md(w.from)}–${md(w.end)} · 계획한 것과 실제로 한 것</span>
+          <button class="ib" aria-label="다음 주" disabled=${!back} onClick=${() => setBack(back - 1)}><${Icon} n="right" /></button>
+        </div>`}
+    <div class="appear" key=${all ? 'all' : 'w' + back}>
     <div class="facts">
       <div class="fact"><div class="k">계획한 일</div><div class="v">${w.planned}<small>개</small></div></div>
       <div class="fact"><div class="k">끝낸 일</div><div class="v">${w.done}<small>개 · ${rate == null ? '–' : P(rate)}</small></div></div>
@@ -556,8 +666,10 @@ export function WeekSheet() {
       <div class="fact"><div class="k">안 하기로 한 일</div><div class="v">${w.dropped}<small>개</small></div></div>
     </div>
     <div class="sec-title">날마다 한 양<em>합계 ${sum.text}</em></div>
-    <div class="vbars">${w.days.map((d) => html`<div key=${d.d} title=${`${md(d.d)} ${d.pages}`}><i class=${d.pages ? '' : 'zero'} style=${{ height: `${Math.max(3, (d.pages / mx) * 100)}%` }}></i></div>`)}</div>
-    <div class="vbars-x">${w.days.map((d) => html`<span key=${d.d}>${C.WD[C.weekday(d.d)]}</span>`)}</div>
+    <div class=${'vbars' + (many ? ' many' : '')}>${w.days.map((d) => html`<div key=${d.d} title=${`${md(d.d)} ${d.pages}`}><i class=${d.pages ? '' : 'zero'} style=${{ height: `${Math.max(3, (d.pages / mx) * 100)}%` }}></i></div>`)}</div>
+    <div class="vbars-x">${many
+      ? html`<span>${md(w.days[0].d)}</span><span>${md(w.days[w.days.length - 1].d)}</span>`
+      : w.days.map((d) => html`<span key=${d.d}>${C.WD[C.weekday(d.d)]}</span>`)}</div>
     <div class="sec-title">과목마다</div>
     <table class="tbl"><thead><tr><th>과목</th><th class="r">계획</th><th class="r">끝냄</th><th class="r">비율</th></tr></thead><tbody>
       ${D().subjects.filter((s) => w.bySub[s.id]).map((s) => {
@@ -583,6 +695,7 @@ export function WeekSheet() {
           })}
         </tbody></table>`
       : html`<p class="hint" style="margin-top:0">끝낸 할 일을 누르면 걸린 시간을 고를 수 있어요. 적은 것만 여기서 예상과 나란히 보여요.</p>`}
+    </div>
   <//>`;
 }
 
@@ -598,7 +711,8 @@ export function PlanSheet({ only }) {
   const byDay = rows.map((d) => [d, tasks.filter((t) => t.date === d)]);
   // 그날 이미 있는 다른 할 일(직접 넣은 일 등)도 시간에 더한다
   const stays = (t) => t.status === 'todo' && !(t.kind === 'track' && !t.manual && !t.hist && (!only || t.subjectId === only));
-  const dayMin = (d, l) => C.plannedMinutes(l) + C.plannedMinutes(D().tasks.filter((t) => t.date === d && stays(t)));
+  // 2주보다 먼 날의 반복하는 일은 아직 할 일로 안 만들어져 있으니 따로 더한다
+  const dayMin = (d, l) => C.plannedMinutes(l) + C.plannedMinutes(D().tasks.filter((t) => t.date === d && stays(t))) + C.pendingRepeatMinutes(d);
   const total = C.mix(tasks.map((t) => [subById(t.subjectId), taskPages(t)]));
   const p = PR();
   const E = C.endWord();
@@ -625,7 +739,7 @@ export function PlanSheet({ only }) {
       ? html`<div class="kv" style="margin-bottom:6px"><span class="k">예상 시간 합</span><span class="v"><b class="num">${minutes(needMin)}</b> <span class="muted">/ 공부 가능 시간 합 ${minutes(capMin)}</span></span></div>`
       : null}
     ${ex
-      ? html`<p class="hint" style="margin:0 0 10px">과목마다 지금 하는 단계부터 이어서, ${mdws(C.lastPlanDay(ex))}까지 나눠요. 공부 가능 시간이 긴 날에 더 많이 넣어요. 이미 끝낸 일과 직접 넣은 일은 그대로 둬요. 날짜의 시간을 누르면 그날만 바꿀 수 있어요.</p>`
+      ? html`<p class="hint" style="margin:0 0 10px">과목마다 지금 하는 단계부터 이어서, ${mdws(C.lastPlanDay(ex))}까지 나눠요. 직접 넣은 일과 반복하는 일 시간을 먼저 빼고, 남는 시간이 긴 날에 더 많이 넣어요. 이미 끝낸 일과 직접 넣은 일은 그대로 둬요. 날짜의 시간을 누르면 그날만 바꿀 수 있어요.</p>`
       : null}
     <div class="set-list" style="margin-bottom:14px">
       <div class="set-row col"><span class="l"><b>쉬는 요일</b><small>이 요일에는 넣지 않아요</small></span>

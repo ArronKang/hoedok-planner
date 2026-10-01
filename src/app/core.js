@@ -84,19 +84,21 @@ export const kindOfName = (n) => (n.includes('모의') ? 'mock' : n.includes('�
 // ─────────── 상태 ───────────
 
 /** 기기마다 따로 두는 화면 설정 (동기화하지 않음). 나머지 prefs는 공부 설정이라 기기끼리 공유한다. */
-export const DEVICE_PREFS = ['theme', 'mode', 'size', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth'];
+export const DEVICE_PREFS = ['theme', 'mode', 'size', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth', 'motion', 'motionView'];
 
 export function blank() {
   return {
     v: 0,
-    data: { onboarded: false, exam: null, lastExam: null, subjects: [], tasks: [], pastExams: [], semesters: [] },
+    data: { onboarded: false, exam: null, lastExam: null, subjects: [], tasks: [], pastExams: [], semesters: [], repeats: [] },
     prefs: {
       theme: 'paper', mode: 'light', size: 'md', density: 'normal', hand: 'right',
       group: 'subject', doneBottom: false,
-      show: { dday: true, summary: true, overdue: true },
+      show: { dday: true, summary: true, overdue: true, due: true },
       legend: true, lowest: true, recent: true,
       avail: [300, 180, 180, 180, 180, 180, 300], rest: [], dayStart: 4, pace: 3, dayMin: {},
       padAside: 'progress', listWidth: 'normal',
+      // 움직임: null = 아직 고른 적 없음 → 기기의 '동작 줄이기'를 따른다 (motion.js)
+      motion: null, motionView: true,
     },
     ui: { tab: 'today', day: null, stacks: { today: [], progress: [], grades: [] }, sheet: null, ob: 0, open: {}, toast: null, dev: 'pad' },
   };
@@ -312,7 +314,17 @@ export const paceOf = (sub) => (sub && sub.pace) || (isPsg(sub) ? 10 : PR().pace
 /** 예상 시간(분): 직접 고른 값이 있으면 그것, 없으면 진도 할 일은 분량 × 걸리는 시간 */
 export const taskMinutes = (t) => t.est || (t.kind === 'track' ? taskPages(t) * paceOf(subById(t.subjectId)) : 0);
 export const tasksOn = (day) => D().tasks.filter((t) => t.date === day);
-export const overdue = () => D().tasks.filter((t) => t.status === 'todo' && !t.closed && t.date < today());
+/** 지난 날 못 끝낸 일. 반복하는 일은 밀리지 않고 그날 기록으로만 남는다 (매일 하는 일이 쌓이면 보기 싫어지므로) */
+export const overdue = () => D().tasks.filter((t) => t.status === 'todo' && !t.closed && !t.rep && t.date < today());
+
+/** 마감이 가까운 일: 안 끝낸 일 중 마감이 오늘~3일 뒤인데 오늘보다 뒤 날짜에 잡아 둔 것 (오늘 목록에는 안 보이므로) */
+export const DUE_SOON = 3;
+export function dueSoon() {
+  const td = today(), lim = addDays(td, DUE_SOON);
+  return D()
+    .tasks.filter((t) => t.status === 'todo' && t.due && t.due >= td && t.due <= lim && t.date > td)
+    .sort((a, b) => (a.due < b.due ? -1 : a.due > b.due ? 1 : a.date < b.date ? -1 : 1));
+}
 /** 할 일이 어느 시험(또는 끝낼 날) 준비였나 */
 export const belongs = (t, ex) => (t.examId ? t.examId === ex.id : t.date >= ex.start && t.date < planEnd(ex));
 
@@ -353,14 +365,38 @@ export function studyDays(from, to) {
 /** 할 일들의 예상 시간 합 */
 export const plannedMinutes = (list) => list.filter((t) => t.status !== 'dropped').reduce((a, t) => a + taskMinutes(t), 0);
 
-/** 남은 분량을 시험 전날(끝낼 날은 그날)까지 나눠 할 일로 만든다. 공부 가능 시간이 긴 날에 더 많이. */
+/** 아직 할 일로 만들지 않은 앞날의 반복하는 일 예상 시간 (2주보다 먼 날) */
+export function pendingRepeatMinutes(d, data = D(), ids = null) {
+  const rules = data.repeats || [];
+  if (!rules.length) return 0;
+  const have = ids || new Set(data.tasks.map((t) => t.id));
+  return rules.reduce((a, r) => a + (repOn(r, d, data) && !have.has(repId(r, d)) ? r.est || 0 : 0), 0);
+}
+/** 그날 이미 잡힌 시간(분): 직접 넣은 일 + 반복하는 일. 저절로 나눈 진도 할 일은 뺀다 */
+export function fixedMinutes(d, data = D(), ids = null) {
+  let m = 0;
+  for (const t of data.tasks) if (t.date === d && t.status !== 'dropped' && (t.kind === 'free' || t.manual)) m += taskMinutes(t);
+  return m + pendingRepeatMinutes(d, data, ids);
+}
+/** 나눌 날과 무게: 공부 가능 시간에서 그날 이미 잡힌 시간을 뺀 만큼. 모든 날이 꽉 차 있으면 원래 시간대로 */
+export function planDays(from, to, data = D()) {
+  const days = studyDays(from, to);
+  const ids = new Set(data.tasks.map((t) => t.id));
+  const adj = days.map((x) => ({ d: x.d, w: Math.max(0, x.w - fixedMinutes(x.d, data, ids)) }));
+  return adj.some((x) => x.w > 0) ? adj.filter((x) => x.w > 0) : days;
+}
+
+/**
+ * 남은 분량을 시험 전날(끝낼 날은 그날)까지 나눠 할 일로 만든다.
+ * 그날 남는 시간(공부 가능 시간 − 직접 넣은 일·반복하는 일)이 긴 날에 더 많이.
+ */
 export function planSubject(sub, from = today(), data = D()) {
   const ex = data.exam;
   if (!ex) return 0;
   data.tasks = data.tasks.filter((t) => !(t.kind === 'track' && t.subjectId === sub.id && t.status === 'todo' && t.date >= from && !t.manual && !t.hist));
   const units = [];
   for (const s of sub.stages) for (let p = s.from; p <= s.to; p++) if (!isMarked(s, p)) units.push([s.id, p]);
-  const days = studyDays(from, planEnd(ex));
+  const days = planDays(from, planEnd(ex), data);
   if (!units.length || !days.length) return 0;
   const W = days.reduce((a, x) => a + x.w, 0);
   let acc = 0, idx = 0, made = 0;
@@ -402,7 +438,8 @@ export function previewPlan(from = today(), onlySub = null) {
   const clone = JSON.parse(JSON.stringify(D()));
   for (const sub of clone.subjects) if (!onlySub || sub.id === onlySub) planSubject(sub, from, clone);
   const tasks = clone.tasks.filter((t) => t.kind === 'track' && t.status === 'todo' && t.date >= from && !t.manual && !t.hist && (!onlySub || t.subjectId === onlySub));
-  const days = studyDays(from, clone.exam ? planEnd(clone.exam) : from);
+  // 나눌 날 = 진도 할 일이 들어갈 수 있는 날 (직접 넣은 일로 꽉 찬 날은 빠진다)
+  const days = clone.exam ? planDays(from, planEnd(clone.exam), clone) : [];
   return { tasks, days, subjects: clone.subjects };
 }
 
@@ -513,7 +550,113 @@ export function setReason(id, reason) {
 }
 export function deleteTask(id) {
   const data = D();
-  data.tasks = data.tasks.filter((t) => t.id !== id);
+  const t = data.tasks.find((x) => x.id === id);
+  // 반복하는 일을 지우면 그날만 빠진다 (다시 만들지 않게 기억)
+  const r = t && t.rep && repeatById(t.rep);
+  if (r) r.skip = [...(r.skip || []).filter((d) => d >= today()), t.repDay || t.date];
+  data.tasks = data.tasks.filter((x) => x.id !== id);
+}
+
+// ─────────── 반복하는 할 일 ───────────
+// 규칙 = { id, subjectId, title, days: [요일 0~6], start, skip: [뺀 날], est?, pri?, at?, reps? }
+// 할 일은 오늘부터 2주 앞까지만 만들어 둔다. 번호는 '규칙번호.날짜'
+// → 두 기기가 따로 만들어도 같은 할 일 하나가 된다.
+
+export const REPEAT_AHEAD = 14;
+/** 반복하는 일에서 바꾸면 그 뒤 날짜의 반복에도 같이 바뀌는 칸 (메모·사진·마감일·걸린 시간은 그날 것만) */
+export const REP_FIELDS = ['title', 'est', 'pri', 'at', 'reps'];
+export const repeatById = (id) => (D().repeats || []).find((r) => r.id === id) || null;
+export const repId = (r, d) => `${r.id}.${d}`;
+const repOn = (r, d, data) => d >= r.start && r.days.includes(weekday(d)) && !(r.skip || []).includes(d) && data.subjects.some((s) => s.id === r.subjectId);
+const keepsStuff = (t) => !!(t.memo || (t.photos || []).length || t.due);
+/** '매일' / '월·수·금' */
+export const daysText = (days) => (days.length === 7 ? '매일' : [1, 2, 3, 4, 5, 6, 0].filter((w) => days.includes(w)).map((w) => WD[w]).join('·'));
+
+/** 반복 규칙마다 오늘부터 2주 앞까지 빠진 날을 채운다. 만든 개수를 돌려준다. */
+export function fillRepeats(data = D(), from = today()) {
+  const rules = data.repeats || [];
+  if (!rules.length) return 0;
+  const have = new Set(data.tasks.map((t) => t.id));
+  let n = 0;
+  for (const r of rules)
+    for (let i = 0; i < REPEAT_AHEAD; i++) {
+      const d = addDays(from, i);
+      const id = repId(r, d);
+      if (have.has(id) || !repOn(r, d, data)) continue;
+      const ex = data.exam;
+      const t = { id, kind: 'free', rep: r.id, repDay: d, gen: true, examId: ex && d < planEnd(ex) ? ex.id : null, date: d, subjectId: r.subjectId, title: r.title, status: 'todo', moves: [] };
+      for (const k of REP_FIELDS) if (k !== 'title' && r[k]) t[k] = r[k];
+      data.tasks.push(t);
+      have.add(id);
+      n++;
+    }
+  return n;
+}
+
+/**
+ * 할 일을 반복하게 한다. days: 요일 목록(빈 목록 = 그만하기).
+ * 이미 반복하는 일이면 요일만 바꾼다. 할 일 번호가 바뀔 수 있어 새 번호를 돌려준다.
+ */
+export function setRepeat(taskId, days) {
+  const data = D();
+  const t = data.tasks.find((x) => x.id === taskId);
+  if (!t || t.kind !== 'free') return taskId;
+  const td = today();
+  const r0 = t.rep && repeatById(t.rep);
+  const ds = [...new Set(days)].sort((a, b) => a - b);
+  if (!ds.length) {
+    if (r0) stopRepeat(r0.id);
+    return taskId;
+  }
+  if (r0) {
+    r0.days = ds;
+    // 새 요일에 안 맞는 앞날의 반복은 치운다 (메모·사진·마감을 붙인 것은 둔다)
+    data.tasks = data.tasks.filter((x) => !(x.rep === r0.id && x.id !== t.id && x.status === 'todo' && x.date > td && !ds.includes(weekday(x.repDay || x.date)) && !keepsStuff(x)));
+    fillRepeats(data);
+    return t.id;
+  }
+  const r = { id: uid(), subjectId: t.subjectId, title: t.title, days: ds, start: t.date < td ? td : t.date, skip: [] };
+  for (const k of REP_FIELDS) if (k !== 'title' && t[k]) r[k] = t[k];
+  data.repeats = [...(data.repeats || []), r];
+  // 이 할 일이 그날의 반복이 된다
+  t.id = repId(r, t.date);
+  t.rep = r.id;
+  t.repDay = t.date;
+  fillRepeats(data);
+  return t.id;
+}
+
+/**
+ * 반복 그만하기: 규칙을 지우고 내일부터의 반복을 치운다. 오늘 것과 지난 기록은 남는다.
+ * keepId: 지금 보고 있는 할 일 — 오늘 이후라면 보통 할 일로 되돌린다.
+ */
+export function stopRepeat(ruleId, keepId = null) {
+  const data = D();
+  const td = today();
+  data.repeats = (data.repeats || []).filter((r) => r.id !== ruleId);
+  data.tasks = data.tasks.filter((x) => !(x.rep === ruleId && x.id !== keepId && x.status === 'todo' && x.date > td && !keepsStuff(x)));
+  // 남겨 둔 앞날 것(메모 등을 붙인 것)은 보통 할 일이 된다
+  for (const x of data.tasks)
+    if (x.rep === ruleId && (x.date > td || (x.id === keepId && x.date >= td))) {
+      delete x.rep;
+      delete x.repDay;
+      delete x.gen;
+    }
+}
+
+/** 할 일 칸 하나 바꾸기. 반복하는 일이면 이름·시간·중요도 등은 그 뒤 날짜의 반복에도 같이 바꾼다. */
+export function editTask(t, k, v) {
+  t[k] = v;
+  const r = t.rep && REP_FIELDS.includes(k) && repeatById(t.rep);
+  if (!r) return;
+  if (v == null || v === '') delete r[k];
+  else r[k] = v;
+  for (const x of D().tasks)
+    if (x.rep === r.id && x.id !== t.id && x.status === 'todo' && x.date > t.date) {
+      if (v == null || v === '') delete x[k];
+      else x[k] = v;
+      if (k === 'reps') x.repDone = Math.min(x.repDone || 0, Math.max(0, (v || 1) - 1));
+    }
 }
 
 /** 단계에 몇 쪽까지 했는지 직접 적기. 이미 잡힌 할 일도 맞춰 준다. */
@@ -703,6 +846,8 @@ export function closeExam({ scores = {}, mock = null } = {}) {
   }
   data.tasks = data.tasks.filter((t) => !(t.kind === 'track' && t.status === 'todo' && t.date >= td && !t.hist && belongs(t, ex)));
   for (const t of data.tasks) {
+    // 시험 뒤로 잡아 둔 직접 넣은 일·반복하는 일은 이 시험 소속이 아니다 → 날짜로 다음 시험에 들어가게
+    if (t.kind === 'free' && t.status === 'todo' && t.date >= td && t.examId === ex.id) t.examId = null;
     if (t.kind !== 'track' || !belongs(t, ex)) continue;
     t.hist = true; // 지난 시험 기록: 다시 눌러도 새 진도에 영향 없음
     if (t.status === 'todo') t.closed = true;
@@ -791,8 +936,10 @@ export function setUnit(sub, unit, n = 12) {
 }
 
 /** 한 주 돌아보기 (사실만) */
-export function weekStats(end = today()) {
-  const from = addDays(end, -6);
+export const weekStats = (end = today()) => periodStats(addDays(end, -6), end);
+
+/** 기간 돌아보기 (사실만): 한 주, 또는 시험 준비를 시작한 날부터 오늘까지 */
+export function periodStats(from, end) {
   const inR = (d) => d >= from && d <= end;
   const out = { from, end, planned: 0, done: 0, moved: 0, dropped: 0, missed: 0, bySub: {}, reasons: {}, est: 0, pages: 0, time: { n: 0, est: 0, actual: 0, bySub: {} } };
   const bump = (sid, k) => {
@@ -836,7 +983,7 @@ export function weekStats(end = today()) {
       bump(t.subjectId, 'planned');
     }
   }
-  const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
+  const days = Array.from({ length: diffDays(from, end) + 1 }, (_, i) => addDays(from, i));
   out.days = days.map((d) => ({ d, pages: D().subjects.reduce((a, s) => a + ((s.log || {})[d] || 0), 0) }));
   out.pages = out.days.reduce((a, x) => a + x.pages, 0);
   return out;
@@ -1005,6 +1152,11 @@ export function loadDemo() {
   data.tasks.push({ id: uid(), kind: 'free', examId: exId, date: addDays(T, -1), subjectId: soc.id, title: '평가문제집 틀린 문제 다시 풀기', status: 'todo', moves: [], est: 30 });
   data.tasks.push({ id: uid(), kind: 'free', examId: exId, date: T, subjectId: soc.id, title: '수행평가 보고서 개요 쓰기', status: 'todo', moves: [], est: 40, due: addDays(T, 3), pri: 3, at: '21:00' });
   data.tasks.push({ id: uid(), kind: 'free', examId: exId, date: T, subjectId: eng.id, title: '영단어 Day 12 외우기', status: 'todo', moves: [], est: 20, reps: 3, repDone: 1, at: '07:40' });
+  // 다른 날로 잡아 둔 수행평가 → '마감이 가까운 일' 한 줄
+  data.tasks.push({ id: uid(), kind: 'free', examId: exId, date: addDays(T, 2), subjectId: data.subjects[4].id, title: '실험 보고서 마무리', status: 'todo', moves: [], est: 40, due: addDays(T, 3) });
+  // 반복하는 일: 월·수·금 수학 오답 정리
+  data.repeats = [{ id: 'rep-demo', subjectId: data.subjects[1].id, title: '오답 노트 정리', days: [1, 3, 5], start: addDays(T, -14), skip: [], est: 30 }];
+  fillRepeats(data);
 
   // 지난 시험과 성적
   const S = (n) => data.subjects.find((s) => s.name === n);

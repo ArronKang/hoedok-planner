@@ -192,7 +192,7 @@ export function SubjectPage({ id, back }) {
         <div>
           <button class="more-toggle" onClick=${() => setUI({ open: { ...UI().open, ['more-' + sub.id]: !more } })} aria-expanded=${more ? 'true' : 'false'}>기록 더 보기<span class="caret">${more ? '▴' : '▾'}</span></button>
           ${more
-            ? html`<div class="stack">
+            ? html`<div class="stack appear">
                 ${p.recent ? html`<${Recent} sub=${sub} />` : null}
                 <${Coverage} sub=${sub} />
                 <${Upcoming} sub=${sub} />
