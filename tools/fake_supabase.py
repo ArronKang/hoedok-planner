@@ -7,6 +7,8 @@
 
     python tools/fake_supabase.py            # http://127.0.0.1:54321, 키: test-anon-key
     python tools/fake_supabase.py 54321 --confirm   # 가입하면 확인 메일이 필요한 것처럼
+    python tools/fake_supabase.py 54321 --no-signup # 새 가입을 막아 둔 것처럼 (혼자 쓰는 계정)
+    python tools/fake_supabase.py 54321 --dump      # 서버에 들어간 기록을 /__dump 로 볼 수 있게 (시험용)
 
 진짜 서버와 같은 규칙: 기록은 로그인한 본인 것만 읽고 쓴다. 같은 레코드는 client_updated_at이 더 큰 쪽이 이긴다.
 자료는 메모리에만 있다 (끄면 사라짐).
@@ -22,6 +24,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else 54321
 KEY = "test-anon-key"
 CONFIRM = "--confirm" in sys.argv
+NO_SIGNUP = "--no-signup" in sys.argv  # 진짜 서버에서 '새 가입 받지 않기'를 켠 것처럼
 
 # 시험용 계정 (이 가짜 서버 안에만 있는 값)
 TEST_EMAIL = "tester@hoedok.test"
@@ -93,6 +96,8 @@ class H(BaseHTTPRequestHandler):
         q = parse_qs(u.query)
         with lock:
             if u.path == "/auth/v1/signup":
+                if NO_SIGNUP:
+                    return self.send(422, {"code": "signup_disabled", "msg": "Signups not allowed for this instance"})
                 b = self.json_body()
                 email, pw = b.get("email", "").lower(), b.get("password", "")
                 if len(pw) < 6:
@@ -147,6 +152,9 @@ class H(BaseHTTPRequestHandler):
         self.send(404, {"message": "not found"})
 
     def do_GET(self):
+        if "--dump" in sys.argv and urlparse(self.path).path == "/__dump":
+            with lock:
+                return self.send(200, [{"user": ou, **r} for (ou, _, _), r in sorted(records.items(), key=lambda kv: kv[1]["rev"])])
         if not self.check_key():
             return
         u = urlparse(self.path)
@@ -158,7 +166,18 @@ class H(BaseHTTPRequestHandler):
             if u.path == "/rest/v1/records":
                 after = int((q.get("rev", ["gt.0"])[0]).split(".")[1])
                 limit = int(q.get("limit", ["1000"])[0])
-                rows = sorted((r for (ou, _, _), r in records.items() if ou == uid and r["rev"] > after), key=lambda r: r["rev"])[:limit]
+                # 기록 공간 나누기: tbl=like.preview:* / tbl=not.like.preview:* (PostgREST의 * = %)
+                f = q.get("tbl", [""])[0]
+                neg = f.startswith("not.")
+                f = f[4:] if neg else f
+                pre = f[5:].rstrip("*") if f.startswith("like.") else None
+
+                def keep(r):
+                    if pre is None:
+                        return True
+                    return r["tbl"].startswith(pre) != neg
+
+                rows = sorted((r for (ou, _, _), r in records.items() if ou == uid and r["rev"] > after and keep(r)), key=lambda r: r["rev"])[:limit]
                 return self.send(200, rows)
             pre = "/storage/v1/object/authenticated/attachments/"
             if u.path.startswith(pre):

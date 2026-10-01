@@ -1,9 +1,11 @@
 // 처음 설정: 시험 → 과목 → 교재 → 시작. 공부 순서는 묻지 않고 기본값(개념→문제→개념→심화)으로.
 import { html } from '../lib/html.js';
-import { useState } from '../lib/ui.js';
+import { useState, useStore } from '../lib/ui.js';
 import * as C from './core.js';
 import { hue } from './kit.js';
 import { BookEditor } from './progress.js';
+import { syncState } from '../sync/state.js';
+import { installable, openInstall, platform } from './pwa.js';
 
 const { D, UI, setUI, commit, today, addDays, diffDays, mdws } = C;
 
@@ -30,8 +32,13 @@ export function Onboarding() {
   const data = D();
   const [picked, setPicked] = useState(() => new Set(data.subjects.length ? data.subjects.map((s) => s.name) : ['공통국어', '공통수학', '공통영어', '한국사', '통합사회', '통합과학']));
   const [custom, setCustom] = useState('');
+  const sync = useStore(syncState);
 
   if (step === 0) {
+    const me = platform();
+    const install = installable() && me !== 'desktop';
+    // 로그인한 상태면 예시는 숨긴다 (예시가 계정에 섞일 길을 아예 없앰)
+    const signed = !!sync.user;
     return html`<div class="ob"><div class="ob-hello">
       <div class="ob-demo hue" style=${hue(14)}>
         <div class="row"><span class="dot"></span><b>통합사회</b><span class="num" style="margin-left:auto;color:var(--sc);font-size:1.3em">47%</span></div>
@@ -44,8 +51,16 @@ export function Onboarding() {
         commit();
         go(1);
       }}>시작하기</button>
-      <button class="btn ghost block" style="margin-top:8px" onClick=${() => C.loadDemo()}>예시로 먼저 둘러보기</button>
-      <button class="btn ghost block" style="margin-top:2px" onClick=${() => C.openSheet({ type: 'settings', page: 'account' })}>다른 기기에서 쓰던 기록이 있어요</button>
+      ${signed
+        ? html`<p class="ob-signed">로그인됨 · ${sync.user.email}${sync.first ? html`<br />계정 기록을 받아 오는 중…` : ''}</p>`
+        : html`<button class="btn ghost block" style="margin-top:8px" onClick=${() => C.loadDemo()}>예시로 먼저 둘러보기</button>
+            <button class="btn ghost block" style="margin-top:2px" onClick=${() => C.openSheet({ type: 'settings', page: 'account', from: 'ob' })}>다른 기기에서 쓰던 기록이 있어요</button>`}
+      ${install
+        ? html`<div class="ob-install">
+            ${me === 'ios' ? html`<p>아이폰은 먼저 <b>홈 화면에 추가</b>하고, 그 아이콘으로 열어서 시작하세요. Safari와 아이콘 앱은 기록이 따로예요.</p>` : html`<p>홈 화면에 추가하면 아이콘을 눌러 앱처럼 열려요.</p>`}
+            <button class="link" onClick=${openInstall}>홈 화면에 추가하는 법</button>
+          </div>`
+        : null}
     </div></div>`;
   }
 

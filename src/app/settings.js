@@ -6,6 +6,11 @@ import { Icon, Sheet, Seg, Switch, Stepper, hue } from './kit.js';
 import { AccountPage, syncSmall } from './account.js';
 import * as M from './motion.js';
 import { ns } from '../env.js';
+import { FONTS, fontById, loadPreviews, previewFamily } from './fonts.js';
+import { installable, openInstall } from './pwa.js';
+import { wipeThisDevice } from './store.js';
+import { needsAttention } from '../sync/sync.js';
+import { syncState } from '../sync/state.js';
 
 const { D, PR, UI, setPrefs, openSheet, closeSheet, commit, toast, minutes, WD } = C;
 
@@ -15,10 +20,10 @@ const THEMES = [
   { id: 'soft', name: '부드러움', desc: '넉넉한 여백, 둥근 모서리', sw: ['#f1f2f5', '#ffffff', '#3d5afe', '#e85d22'] },
 ];
 
-function Row({ label, small, children, onClick, danger }) {
+function Row({ label, small, children, onClick, danger, warn }) {
   const Tag = onClick ? 'button' : 'div';
   return html`<${Tag} class=${'set-row' + (danger ? ' danger' : '')} onClick=${onClick}>
-    <span class="l"><b>${label}</b>${small ? html`<small>${small}</small>` : null}</span>
+    <span class="l"><b>${label}</b>${small ? html`<small class=${warn ? 'warn' : ''}>${small}</small>` : null}</span>
     ${children}${onClick ? html`<${Icon} n="right" s=${18} />` : null}
   <//>`;
 }
@@ -89,12 +94,24 @@ const MODE_LABEL = { auto: '기기 따라', light: '밝게', dark: '어둡게' }
 const SIZE_LABEL = { sm: '작게', md: '보통', lg: '크게', xl: '아주 크게' };
 const MOTION_LABEL = Object.fromEntries(M.LEVELS);
 
+/** 예시 끝내기: 예시를 지우고 처음 화면으로. 서버로 보낼 것도 남기지 않는다 */
+async function leaveDemo() {
+  await wipeThisDevice();
+  location.reload();
+}
+
 /** 설정 첫 화면: 자주 쓰는 것부터. 화면 꾸미기는 한 단계 안으로 */
 function Root({ nav }) {
   const p = PR();
   const [wipeAsk, setWipeAsk] = useState(false);
   const theme = THEMES.find((t) => t.id === p.theme) || THEMES[0];
+  const demo = C.isDemo();
   return html`<div>
+    ${demo
+      ? html`<div class="set-group"><div class="set-list"><button class="set-row key" onClick=${leaveDemo}>
+          <span class="l"><b>예시 끝내고 내 기록으로 시작</b><small>지금은 예시 기록이에요. 누르면 예시를 지우고 처음 설정으로 가요</small></span><${Icon} n="right" s=${18} />
+        </button></div></div>`
+      : null}
     <${Group} title="공부">
       <${Row} label=${C.isGoal() ? '끝낼 날' : '시험'} small=${D().exam ? `${D().exam.name} · ${C.mdws(D().exam.date)}` : '안 정함'} onClick=${() => (D().exam ? nav('exam') : openSheet({ type: 'cycle', step: 'next' }))} />
       <${Row} label="과목" small=${`${D().subjects.length}개 · 색·순서·성적 계산`} onClick=${() => nav('subjects')} />
@@ -102,11 +119,12 @@ function Root({ nav }) {
     <//>
 
     <${Group}>
-      <${Row} label="계정 · 동기화" small=${syncSmall()} onClick=${() => nav('account')} />
+      <${Row} label="계정 · 동기화" small=${syncSmall()} warn=${needsAttention()} onClick=${() => nav('account')} />
+      ${installable() ? html`<${Row} label="홈 화면에 앱으로 추가" small="아이콘을 눌러 앱처럼 열기 · 인터넷 없이도 열려요" onClick=${openInstall} />` : null}
     <//>
 
     <${Group} title="화면">
-      <${Row} label="디자인 · 글자 · 움직임" small=${`${theme.name} · ${MODE_LABEL[p.mode]} · 글자 ${SIZE_LABEL[p.size]} · 움직임 ${MOTION_LABEL[M.level()]}`} onClick=${() => nav('display')} />
+      <${Row} label="디자인 · 글꼴 · 움직임" small=${`${theme.name} · ${MODE_LABEL[p.mode]} · ${fontById(p.font).name} · 글자 ${SIZE_LABEL[p.size]}`} onClick=${() => nav('display')} />
       <${Row} label="보일 것 고르기" small="오늘·진도 화면에 무엇을 보일지" onClick=${() => nav('views')} />
     <//>
 
@@ -116,21 +134,23 @@ function Root({ nav }) {
         <span class="l"><b>파일에서 불러오기</b><small>내보낸 파일로 지금 기록을 바꿔요</small></span><${Icon} n="right" s=${18} />
         <input type="file" accept="application/json,.json" style="display:none" onChange=${pickBackup} />
       </label>
-      <${Row}
-        danger
-        label=${wipeAsk ? '한 번 더 누르면 모두 지워져요' : '모든 기록 지우고 처음부터'}
-        small=${wipeAsk ? '지운 직후에는 되돌릴 수 있어요' : '과목·할 일·성적을 모두 지워요. 먼저 파일로 내보내 두면 안전해요'}
-        onClick=${() => {
-          if (!wipeAsk) return setWipeAsk(true);
-          C.withUndo('모든 기록을 지웠어요', () => C.resetAll());
-        }}
-      />
+      ${demo
+        ? null
+        : html`<${Row}
+            danger
+            label=${wipeAsk ? '한 번 더 누르면 모두 지워져요' : '모든 기록 지우고 처음부터'}
+            small=${wipeAsk ? '지운 직후에는 되돌릴 수 있어요' : syncState.get().user ? '과목·할 일·성적을 모두 지워요. 계정과 다른 기기에서도 지워져요' : '과목·할 일·성적을 모두 지워요. 먼저 파일로 내보내 두면 안전해요'}
+            onClick=${() => {
+              if (!wipeAsk) return setWipeAsk(true);
+              C.withUndo('모든 기록을 지웠어요', () => C.resetAll());
+            }}
+          />`}
     <//>
   </div>`;
 }
 
-/** 디자인·밝기·글자·간격 (+ 태블릿 배치). 이 기기에만 저장 */
-function DisplayPage() {
+/** 디자인·밝기·글꼴·글자·간격 (+ 태블릿 배치). 이 기기에만 저장 */
+function DisplayPage({ nav }) {
   const p = PR();
   const pad = C.isPadDev();
   return html`<div>
@@ -143,6 +163,9 @@ function DisplayPage() {
         </button>`)}</div>
       </div>
       <${Row} label="밝기"><${Seg} label="밝기" value=${p.mode} onChange=${(v) => setPrefs({ mode: v })} options=${[['auto', '기기 따라'], ['light', '밝게'], ['dark', '어둡게']]} /><//>
+    <//>
+    <${Group} title="글자">
+      <${Row} label="글꼴" small=${fontById(p.font).name} onClick=${() => nav('font')} />
       <${Row} label="글자 크기"><${Seg} label="글자 크기" value=${p.size} onChange=${(v) => setPrefs({ size: v })} options=${[['sm', '작게'], ['md', '보통'], ['lg', '크게'], ['xl', '아주 크게']]} /><//>
       <${Row} label="간격" small="한 화면에 보이는 양"><${Seg} label="간격" value=${p.density} onChange=${(v) => setPrefs({ density: v })} options=${[['compact', '촘촘'], ['normal', '보통'], ['relaxed', '넉넉']]} /><//>
       ${!pad ? html`<${Row} label="＋ 단추 위치" small="쥐는 손 쪽으로"><${Seg} label="단추 위치" value=${p.hand} onChange=${(v) => setPrefs({ hand: v })} options=${[['left', '왼쪽'], ['right', '오른쪽']]} /><//>` : null}
@@ -155,6 +178,26 @@ function DisplayPage() {
         <//>`
       : null}
     <p class="hint" style="text-align:center">화면 설정은 이 기기에만 저장돼요. 다른 기기는 따로 정해요.</p>
+  </div>`;
+}
+
+/**
+ * 한글 글꼴: 이름과 설명을 각 글꼴로 보여 주고, 누르면 앱 전체가 바로 그 글꼴로 바뀐다.
+ * 처음 쓰는 글꼴은 인터넷에서 받아 오는 동안 잠깐 기본 글꼴로 보인다.
+ */
+function FontPage() {
+  const p = PR();
+  const cur = fontById(p.font).id;
+  loadPreviews();
+  return html`<div>
+    <p class="sub" style="margin:0 0 12px">누르면 바로 바뀌어요. 숫자 모양은 디자인마다 정해져 있어요.</p>
+    <div class="set-list font-list" role="radiogroup" aria-label="글꼴">
+      ${FONTS.map((f) => html`<button key=${f.id} class="set-row font-opt" role="radio" aria-checked=${cur === f.id ? 'true' : 'false'} onClick=${() => setPrefs({ font: f.id })}>
+        <span class="l" style=${{ fontFamily: previewFamily(f) }}><b>${f.name}</b><small>${f.desc}</small></span>
+        ${cur === f.id ? html`<${Icon} n="check" s=${18} />` : null}
+      </button>`)}
+    </div>
+    <p class="hint" style="text-align:center">처음 고른 글꼴은 인터넷에서 받아 와요. 한 번 받으면 인터넷 없이도 보여요.</p>
   </div>`;
 }
 
@@ -300,22 +343,25 @@ function SubjectsPage() {
   </div>`;
 }
 
+// [제목, 화면, 뒤로 갈 곳(없으면 설정 첫 화면)]
 const PAGES = {
   time: ['공부 시간', TimePage],
   exam: ['시험', ExamPage],
   subjects: ['과목', SubjectsPage],
   account: ['계정 · 동기화', AccountPage],
-  display: ['디자인 · 글자 · 움직임', DisplayPage],
+  display: ['디자인 · 글꼴 · 움직임', DisplayPage],
+  font: ['글꼴', FontPage, 'display'],
   views: ['보일 것 고르기', ViewsPage],
 };
 
 export function SettingsSheet({ page }) {
   const [cur, setCur] = useState(page || null);
   const P = cur && PAGES[cur];
+  const up = P && P[2];
   return html`<${Sheet} title=${P ? P[0] : '설정'} tall>
     <div class="appear" key=${cur || 'root'}>
-      ${P ? html`<button class="back" onClick=${() => setCur(null)}><${Icon} n="left" s=${20} />설정</button>` : null}
-      ${P ? html`<${P[1]} />` : html`<${Root} nav=${setCur} />`}
+      ${P ? html`<button class="back" onClick=${() => setCur(up || null)}><${Icon} n="left" s=${20} />${up ? PAGES[up][0] : '설정'}</button>` : null}
+      ${P ? html`<${P[1]} nav=${setCur} />` : html`<${Root} nav=${setCur} />`}
     </div>
   <//>`;
 }

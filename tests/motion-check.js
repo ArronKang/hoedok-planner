@@ -22,7 +22,7 @@ function finishAll() {
   return bad.length;
 }
 const anims = (sel) => document.getAnimations().filter((a) => !sel || (a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest(sel)));
-const ghosts = () => document.querySelectorAll('.ghost').length;
+const ghosts = () => document.querySelectorAll('.m-ghost').length;
 const opaque = (sel) => [...document.querySelectorAll(sel)].every((e) => getComputedStyle(e).opacity === '1');
 
 export async function run({ level = 'normal', quiet = false, fast = true } = {}) {
@@ -86,7 +86,7 @@ async function runInner(level, quiet) {
   C.closeSheet();
   await settle();
   if (level !== 'off') {
-    const g = document.querySelector('.ghost');
+    const g = document.querySelector('.m-ghost');
     check('M2 닫을 때 복사본이 흐려짐', !!g);
     if (g) {
       check('D1 복사본은 누를 수 없음', getComputedStyle(g).pointerEvents === 'none');
@@ -94,7 +94,7 @@ async function runInner(level, quiet) {
       check('K1 복사본은 기기 틀 안 (디자인 색 그대로)', g.parentNode === dev);
       const r = g.querySelector('.sheet').getBoundingClientRect();
       const under = document.elementFromPoint(r.left + r.width / 2, r.top + 30);
-      check('D1 사라지는 동안 뒤 화면을 누를 수 있음', under && !under.closest('.ghost'));
+      check('D1 사라지는 동안 뒤 화면을 누를 수 있음', under && !under.closest('.m-ghost'));
     }
   } else check('E1 끄기: 복사본 없음', ghosts() === 0);
   await idle('A 창 닫기');
@@ -139,7 +139,7 @@ async function runInner(level, quiet) {
   C.closeSheet();
   await settle();
   if (level !== 'off') {
-    const gb = document.querySelector('.ghost .sheet-b');
+    const gb = document.querySelector('.m-ghost .sheet-b');
     check('F1 사라지는 창이 맨 위로 튀지 않음', gb && Math.abs(gb.scrollTop - top) < 2, `${gb && gb.scrollTop} / ${top}`);
   }
   await idle('F1');
@@ -152,7 +152,7 @@ async function runInner(level, quiet) {
   C.closeSheet();
   await settle();
   if (level !== 'off') {
-    const gi = document.querySelector('.ghost input.input');
+    const gi = document.querySelector('.m-ghost input.input');
     check('F2 사라지는 창에 적던 글자 그대로', gi && gi.value === '적던 글자');
   }
   await idle('F2');

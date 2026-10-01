@@ -84,14 +84,15 @@ export const kindOfName = (n) => (n.includes('모의') ? 'mock' : n.includes('�
 // ─────────── 상태 ───────────
 
 /** 기기마다 따로 두는 화면 설정 (동기화하지 않음). 나머지 prefs는 공부 설정이라 기기끼리 공유한다. */
-export const DEVICE_PREFS = ['theme', 'mode', 'size', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth', 'motion', 'motionView'];
+export const DEVICE_PREFS = ['theme', 'mode', 'size', 'font', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth', 'motion', 'motionView'];
 
 export function blank() {
   return {
     v: 0,
-    data: { onboarded: false, exam: null, lastExam: null, subjects: [], tasks: [], pastExams: [], semesters: [], repeats: [] },
+    // demo: 예시 기록을 보는 중 (이 동안은 동기화하지 않는다 — 예시가 계정에 섞이지 않게)
+    data: { onboarded: false, demo: false, exam: null, lastExam: null, subjects: [], tasks: [], pastExams: [], semesters: [], repeats: [] },
     prefs: {
-      theme: 'paper', mode: 'light', size: 'md', density: 'normal', hand: 'right',
+      theme: 'paper', mode: 'light', size: 'md', font: 'pretendard', density: 'normal', hand: 'right',
       group: 'subject', doneBottom: false,
       show: { dday: true, summary: true, overdue: true, due: true },
       legend: true, lowest: true, recent: true,
@@ -118,6 +119,9 @@ export function hydrate(data, prefs) {
 }
 
 export const D = () => store.get().data;
+export const isDemo = () => !!store.get().data.demo;
+/** 예시 표시(demo)가 생기기 전에 연 예시도 알아본다: 예시에만 있는 고정 id (진짜 기록의 id는 무작위 8글자) */
+export const looksLikeDemo = (d) => !!(d.demo || (d.exam && d.exam.id === 'ex-now') || (d.pastExams || []).some((e) => e.id === 'ex-final1'));
 export const PR = () => store.get().prefs;
 export const UI = () => store.get().ui;
 export const commit = () => store.set((s) => ({ ...s, v: s.v + 1 }));
@@ -1105,6 +1109,7 @@ export function loadDemo() {
   const b = blank();
   const data = b.data;
   data.onboarded = true;
+  data.demo = true;
   data.exam = { id: 'ex-now', name: '2학기 중간고사', kind: 'mid', date: addDays(T, 11), start: addDays(T, -9) };
   const mk = (name, books, ups, unit) => {
     const sub = newSubjectFor(data, name);

@@ -21,11 +21,23 @@ body {
 
 /* ═══════════ 디자인 토큰 ═══════════ */
 .device {
-  --serif: 'Newsreader', 'Pretendard Variable', Pretendard, serif;
-  --mono: 'JetBrains Mono', ui-monospace, monospace;
-  --geo: 'Space Grotesk', 'Pretendard Variable', Pretendard, sans-serif;
-  --kr: 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif;
+  /* --kf: 고른 한글 글꼴 (설정 › 글꼴, src/app/fonts.js). 숫자 글꼴은 디자인마다, 그 안의 한글은 고른 글꼴로 */
+  --kf: 'Pretendard Variable', Pretendard;
+  --serif: 'Newsreader', var(--kf), serif;
+  --mono: 'JetBrains Mono', var(--kf), ui-monospace, monospace;
+  --geo: 'Space Grotesk', var(--kf), sans-serif;
+  --kr: var(--kf), 'Pretendard Variable', Pretendard, -apple-system, 'Apple SD Gothic Neo', system-ui, sans-serif;
 }
+/* 한글 글꼴: 고른 글꼴을 못 받으면(인터넷 없음) 프리텐다드로.
+   --fz: 같은 크기라도 글꼴마다 한글이 커 보이거나 작아 보여서, 프리텐다드와 비슷해 보이게 맞춘다
+   (한글 획 높이를 재서 차이의 6할만큼. 개구는 눈에 띄게 작아서 다 맞춤) */
+.device[data-font='system'] { --kf: system-ui, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic'; }
+.device[data-font='noto'] { --kf: 'Noto Sans KR'; --fz: .98; }
+.device[data-font='nanum'] { --kf: 'Nanum Gothic'; --fz: .95; }
+.device[data-font='gowun'] { --kf: 'Gowun Dodum'; --fz: .96; }
+.device[data-font='hahmlet'] { --kf: 'Hahmlet'; --fz: .97; }
+.device[data-font='batang'] { --kf: 'Gowun Batang'; --fz: .95; }
+.device[data-font='gaegu'] { --kf: 'Gaegu'; --fz: 1.12; }
 /* 종이 */
 .device[data-theme='paper'] {
   --num: var(--serif); --num-w: 500; --ls: -.02em;
@@ -91,7 +103,7 @@ body {
 .device {
   position: relative; overflow: hidden; display: flex;
   background: var(--bg); color: var(--ink);
-  font-family: var(--kr); font-size: var(--base); line-height: 1.5;
+  font-family: var(--kr); font-size: calc(var(--base) * var(--fz, 1)); line-height: 1.5;
   -webkit-tap-highlight-color: transparent;
 }
 .device.phone { flex-direction: column; }
@@ -775,8 +787,8 @@ h3.q { margin: 0 0 12px; font-size: 1.2em; letter-spacing: var(--ls); }
 .view { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .view.pad-view { flex-direction: row; }
 .sheet-layer, .toast-layer { display: contents; }
-/* 사라지는 복사본: 누를 수 없음 */
-.ghost, .ghost * { pointer-events: none !important; }
+/* 사라지는 복사본: 누를 수 없음 ('.ghost'는 단추 모양 .btn.ghost와 겹쳐서 m-ghost) */
+.m-ghost, .m-ghost * { pointer-events: none !important; }
 
 /* 새로 나온 부분(펼치기·설정 안쪽·달 넘기기)만 서서히 */
 @keyframes appear { from { opacity: 0; translate: 0 6px; } }
@@ -827,3 +839,33 @@ button.preview-bar .add { flex: none; font-weight: 800; text-decoration: underli
 .other-dev { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
 .other-dev summary { cursor: pointer; font-weight: 700; font-size: .92em; color: var(--ink-2); padding: 8px 0; }
 .device.fullscreen.phone.preview .sheet.tall { top: calc(env(safe-area-inset-top) + 40px); }
+/* ═══════════ 4차: 계정 · 앱처럼 열기 · 글꼴 ═══════════ */
+/* 설정 단추의 점: 로그인이 풀렸거나 오래 못 맞출 때만 (sync.js needsAttention) */
+.tabbar button .ic, .side button .ic { position: relative; display: inline-flex; }
+.att-dot { position: absolute; width: 9px; height: 9px; border-radius: 50%; background: var(--flag); box-shadow: 0 0 0 2px var(--bg-2); pointer-events: none; }
+.tabbar .att-dot { top: 3px; right: 13px; }
+.side .att-dot { top: -2px; right: -4px; }
+/* 계정 화면 */
+.hint.err { color: var(--flag); }
+.set-row .l small.warn { color: var(--flag); font-weight: 600; }
+.note-line { margin: 0 0 12px; padding: 10px 12px; border-radius: var(--r); background: var(--surf-2); color: var(--ink-2); font-size: .92em; line-height: 1.5; }
+.note-line.warn { border-left: 3px solid var(--flag); color: var(--ink); }
+button.link { background: none; border: 0; padding: 0; font: inherit; font-weight: 600; color: var(--accent); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.btns .btn.block { flex: 1; }
+/* 처음 화면: 로그인한 상태 / 홈 화면에 추가 */
+.ob-hello .ob-signed { margin: 14px 0 0; font-size: .92em; color: var(--ink-3); text-align: center; }
+.ob-install { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line); text-align: center; }
+.ob-hello .ob-install p { margin: 0 0 6px; font-size: .92em; color: var(--ink-3); }
+/* 오늘 화면의 조용한 한 줄 (예시 보는 중 · 홈 화면에 추가) */
+.banner.quiet { background: transparent; border-style: dashed; color: var(--ink-2); }
+.banner.with-x { padding: 0; gap: 0; cursor: default; }
+.banner.with-x .b { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 12px 6px 12px 14px; background: none; border: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+.banner.with-x .x { flex: none; display: grid; place-items: center; width: 44px; align-self: stretch; background: none; border: 0; color: var(--ink-3); cursor: pointer; }
+/* 설정: 예시 끝내기 줄 */
+.set-row.key { background: var(--accent-soft); }
+.set-row.key .l b { color: var(--accent); }
+/* 글꼴 고르기: 이름과 설명을 각 글꼴로 */
+.font-opt .l b { font-size: 1.12em; font-weight: 600; }
+.font-opt .l small { font-size: max(13px, .86em); }
+.font-opt[aria-checked='true'] { background: var(--accent-soft); }
+.font-opt[aria-checked='true'] svg { color: var(--accent); }

@@ -323,3 +323,21 @@ test('앱: 아직 점수가 안 나온 비중 (통합사회 70%)', () => {
   const soc = C.D().subjects.find((s) => s.name === '통합사회');
   eq(C.remainingWeight(soc).rem, 70);
 });
+
+test('예시: 예시를 열면 표시가 붙고(동기화 멈춤), 처음부터 다시 하면 없어진다', () => {
+  C.loadDemo();
+  eq(C.isDemo(), true);
+  C.resetAll();
+  eq(C.isDemo(), false);
+});
+
+test('예시: 표시가 생기기 전에 연 예시도 알아본다 (진짜 기록은 아님)', () => {
+  C.loadDemo();
+  const d = { ...C.D(), demo: false };
+  eq(C.looksLikeDemo(d), true, '예시 시험 id');
+  // 예시에서 시험을 정리해 시험이 바뀌어도 지난 시험(예시 고정 id)으로 안다
+  eq(C.looksLikeDemo({ ...d, exam: { id: C.uid() } }), true, '지난 시험 id');
+  C.resetAll();
+  C.D().exam = { id: C.uid(), name: '2학기 중간고사', kind: 'mid', date: C.addDays(T(), 10), start: T() };
+  eq(C.looksLikeDemo(C.D()), false);
+});

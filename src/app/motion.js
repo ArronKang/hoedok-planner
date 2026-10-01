@@ -91,7 +91,7 @@ export function release(g, parts, base = 160, z = null) {
   const dev = document.getElementById('device');
   if (!dev) return;
   const node = g.node;
-  node.classList.add('ghost');
+  node.classList.add('m-ghost'); // 'ghost'는 단추 모양(.btn.ghost) 이름과 겹쳐서 쓰지 않는다
   node.setAttribute('aria-hidden', 'true');
   node.inert = true;
   node.removeAttribute('role');
