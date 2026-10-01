@@ -63,14 +63,17 @@ test('앱: 지문별 — 건너뛴 번호는 한 할 일로 (지문 4, 7)', () =
   C.loadDemo();
   const eng = C.D().subjects.find((s) => s.name === '공통영어');
   const t = C.D().tasks.find((x) => x.subjectId === eng.id && x.date === T() && x.kind === 'track');
-  eq(C.trng(t), '지문 4, 7');
-  eq(C.taskPages(t), 2);
+  // 오늘 몫은 요일마다 공부 시간이 달라 4, 7 뒤에 더 붙기도 한다
+  const units = C.unitsOf(t);
+  eq(units.slice(0, 2), [4, 7]);
+  eq(C.trng(t), '지문 ' + units.join(', '));
+  eq(C.taskPages(t), units.length);
   const st = C.taskStage(t);
   C.partialTask(t.id, 4, 'tomorrow');
   ok(C.isMarked(st, 4) && !C.isMarked(st, 7));
   const rest = C.D().tasks.find((x) => x.subjectId === eng.id && x.date === C.addDays(T(), 1) && x.from === 7 && (x.moves || []).length);
   ok(rest, '남은 지문 7이 내일로');
-  eq(C.trng(rest), '지문 7');
+  eq(C.trng(rest), '지문 ' + units.slice(1).join(', '));
 });
 
 test('앱: 격자 칸을 다 채우면 그 할 일도 끝', () => {
@@ -279,9 +282,11 @@ test('나누기: 직접 넣은 일로 꽉 찬 날에는 진도를 안 넣고, �
 test('나누기: 반복하는 일 시간도 먼저 뺀다 (아직 할 일로 안 만든 날 포함)', () => {
   C.loadDemo();
   C.D().tasks = C.D().tasks.filter((t) => t.rep !== 'rep-demo');
-  const far = C.addDays(T(), 9);
+  // 그 요일만 꽉 채운다 (매일로 채우면 시간이 가장 긴 요일이 걸린 날 모든 날이 꽉 차 원래 시간대로 나눈다)
+  let far = C.addDays(T(), 9);
+  while (!C.capacity(far)) far = C.addDays(far, 1);
   const r = C.repeatById('rep-demo');
-  r.days = ALL;
+  r.days = [C.weekday(far)];
   r.est = C.capacity(far) + 30;
   eq(C.fixedMinutes(far) >= C.capacity(far), true);
   C.planAll(T());
