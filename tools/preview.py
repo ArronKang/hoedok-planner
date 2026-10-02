@@ -81,6 +81,9 @@ def local(root, label):
 
 
 def main():
+    # 윈도우 콘솔(cp949)에서 — 같은 글자가 있으면 print가 멈추지 않게
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = [a for a in sys.argv[1:] if not a.startswith('--')]
     label = args[0] if args else ''
     push = '--push' in sys.argv
