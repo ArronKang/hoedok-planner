@@ -4,8 +4,8 @@
 // 두 기기 모두 앱 안에서 서버 주소를 따로 입력할 필요가 없다.
 // 이 두 값은 공개되어도 되는 값이다 (데이터는 로그인한 본인만 읽고 쓸 수 있도록 서버 규칙으로 막는다).
 
-export const SUPABASE_URL = '';
-export const SUPABASE_ANON_KEY = '';
+export const SUPABASE_URL = 'https://iurxvnbjmlfdrjpoxatl.supabase.co';
+export const SUPABASE_ANON_KEY = 'sb_publishable_nCZx7NeQpOu551icAwtYqw_8gPeJ4I3';
 
 export const APP_NAME = '회독 플래너';
 export const APP_VERSION = '1.0.0';
