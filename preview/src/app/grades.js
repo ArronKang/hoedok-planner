@@ -2,7 +2,7 @@
 import { html } from '../lib/html.js';
 import { useState, useRef } from '../lib/ui.js';
 import * as C from './core.js';
-import { Icon, Sheet, hue, Seg, Stepper } from './kit.js';
+import { Icon, Sheet, hue, Seg, Stepper, NumField } from './kit.js';
 import { computeRecord, lostBreakdown, rankPercent, weightedAverageGrade, achievementFromRaw } from '../core/calc/naesin.js';
 
 const { D, UI, openSheet, closeSheet, commit, withUndo, toast, P, fmt, mdws, today } = C;
@@ -275,9 +275,8 @@ export function NaesinPage({ sem: semId, rec: recId, back }) {
   const lost = lostBreakdown(r.elements);
   const lmx = Math.max(0.01, ...lost.items.map((i) => i.lost || 0));
   const rp = r.final.rank && r.final.enrolled ? rankPercent(r.final.rank, r.final.enrolled) : null;
-  const setScore = (el, v) => {
-    const n = v === '' ? null : Number(v);
-    el.score = n == null || isNaN(n) ? null : Math.min(el.max, Math.max(0, n));
+  const setScore = (el, n) => {
+    el.score = n;
     commit();
   };
   return html`<div class="screen hue" style=${hue(r.h)}><div class="scroll">
@@ -291,7 +290,7 @@ export function NaesinPage({ sem: semId, rec: recId, back }) {
         ${r.elements.map((el) => html`<div class="elem" key=${el.id}>
           <span>${el.name}<span class="kind">${el.kind === 'exam' ? '지필' : '수행'}${el.avg != null ? ` · 과목평균 ${el.avg}` : ''}</span></span>
           <span class="c">${el.weight}%</span><span class="c">${el.max}</span>
-          <input class="input" inputmode="decimal" key=${'s' + el.id} defaultValue=${el.score == null ? '' : String(el.score)} aria-label=${el.name + ' 받은 점수'} onChange=${(e) => setScore(el, e.target.value)} />
+          <${NumField} cls="input" decimal empty min=${0} max=${el.max} unit="점" value=${el.score} label=${el.name + ' 받은 점수'} onCommit=${(n) => setScore(el, n)} />
           <span class="c">${c.contributions[el.id] == null ? '–' : c.contributions[el.id].toFixed(2)}</span>
         </div>`)}
         <div class="total-line">
@@ -348,7 +347,7 @@ export function MockEntrySheet() {
   // 적은 값은 다시 그리지 않고 바로 기억한다 (마지막 칸을 적고 곧바로 저장해도 빠지지 않게)
   const vals = useRef({}).current;
   const [name, setName] = useState(`${+today().slice(5, 7)}월 모의고사`);
-  const set = (n, i, v) => (vals[n] = Object.assign([null, null, null], vals[n] || [], { [i]: v === '' || isNaN(Number(v)) ? null : Number(v) }));
+  const set = (n, i, v) => (vals[n] = Object.assign([null, null, null], vals[n] || [], { [i]: v }));
   return html`<${Sheet} title="모의고사 결과 적기" tall footer=${html`<button class="btn" onClick=${closeSheet}>취소</button><button class="btn pri" onClick=${() => {
     const mock = {};
     for (const n of names) if (vals[n] && vals[n][2]) mock[n] = vals[n];
@@ -365,14 +364,16 @@ export function MockEntrySheet() {
   <//>`;
 }
 
+/** 모의고사 표: 원점수(한국사·통합사회·통합과학은 50점 만점)·백분위(0–100)·등급(1–9). 칸을 떠날 때 범위를 확인한다 */
 export function MockTable({ names, set }) {
-  return html`<table class="tbl"><thead><tr><th>과목</th><th class="r">원점수</th><th class="r">백분위</th><th class="r">등급</th></tr></thead><tbody>
+  return html`<table class="tbl mock"><thead><tr><th>과목</th><th class="r">원점수</th><th class="r">백분위</th><th class="r">등급</th></tr></thead><tbody>
     ${names.map((n) => {
       const abs = /영어|한국사/.test(n);
+      const half = /한국사|통합사회|통합과학|탐구/.test(n);
       return html`<tr key=${n}><td>${n}</td>
-        <td class="r"><input class="input pg" inputmode="numeric" aria-label=${n + ' 원점수'} onChange=${(e) => set(n, 0, e.target.value)} /></td>
-        <td class="r">${abs ? html`<span class="muted">–</span>` : html`<input class="input pg" inputmode="numeric" aria-label=${n + ' 백분위'} onChange=${(e) => set(n, 1, e.target.value)} />`}</td>
-        <td class="r"><input class="input pg" inputmode="numeric" aria-label=${n + ' 등급'} onChange=${(e) => set(n, 2, e.target.value)} /></td></tr>`;
+        <td class="r"><${NumField} empty min=${0} max=${half ? 50 : 100} unit="점" label=${n + ' 원점수'} value=${null} onCommit=${(v) => set(n, 0, v)} /></td>
+        <td class="r">${abs ? html`<span class="muted">–</span>` : html`<${NumField} empty min=${0} max=${100} label=${n + ' 백분위'} value=${null} onCommit=${(v) => set(n, 1, v)} />`}</td>
+        <td class="r"><${NumField} empty min=${1} max=${9} unit="등급" label=${n + ' 등급'} value=${null} onCommit=${(v) => set(n, 2, v)} /></td></tr>`;
     })}
   </tbody></table>`;
 }
@@ -506,9 +507,8 @@ export function GradeSetupSheet({ sem: semId, rec: recId }) {
   if (!r) return html`<${Sheet} title="성적 계산 방법"><p class="muted">기록을 찾을 수 없어요.</p><//>`;
   const sumW = r.elements.reduce((a, e) => a + (+e.weight || 0), 0);
   const upd = (el, k, v) => {
-    const n = Number(v);
     if (k === 'name') el.name = v.trim() || el.name;
-    else if (!isNaN(n) && n > 0) el[k] = n;
+    else el[k] = v;
     commit();
   };
   const add = (kind) => {
@@ -540,8 +540,11 @@ export function GradeSetupSheet({ sem: semId, rec: recId }) {
         el.kind = e.target.value;
         commit();
       }}><option value="exam" selected=${el.kind === 'exam'}>지필</option><option value="perf" selected=${el.kind === 'perf'}>수행</option></select>
-      <label class="fld"><input class="input pg" inputmode="decimal" key=${'w' + el.id + el.weight} defaultValue=${String(el.weight)} aria-label=${el.name + ' 반영 비율'} onChange=${(e) => upd(el, 'weight', e.target.value)} /><span>%</span></label>
-      <label class="fld"><input class="input pg" inputmode="decimal" key=${'m' + el.id + el.max} defaultValue=${String(el.max)} aria-label=${el.name + ' 만점'} onChange=${(e) => upd(el, 'max', e.target.value)} /><span>점</span></label>
+      <label class="fld"><${NumField} decimal min=${0.5} max=${100} unit="%" value=${el.weight} label=${el.name + ' 반영 비율'} onCommit=${(n) => upd(el, 'weight', n)} /><span>%</span></label>
+      <label class="fld"><${NumField} decimal min=${1} max=${1000} unit="점" value=${el.max} label=${el.name + ' 만점'} onCommit=${(n) => {
+        upd(el, 'max', n);
+        if (el.score != null && el.score > n) el.score = n; // 받은 점수가 새 만점보다 크면 맞춘다
+      }} /><span>점</span></label>
       <button class="mini-ib x" aria-label=${el.name + ' 빼기'} onClick=${() => withUndo(`'${el.name}' 뺐어요`, () => (r.elements = r.elements.filter((x) => x.id !== el.id)))}>✕</button>
     </div>`)}
     <div class="btns" style="margin-top:12px">
