@@ -3,7 +3,7 @@
 import { html } from '../lib/html.js';
 import { useState, useRef } from '../lib/ui.js';
 import * as C from './core.js';
-import { Sheet, hue } from './kit.js';
+import { Sheet, hue, NumField, DateField } from './kit.js';
 import { BookEditor } from './progress.js';
 import { MockTable } from './grades.js';
 
@@ -31,9 +31,10 @@ export function CycleSheet({ step: first }) {
   // ── 1. 결과 적기 (시험) ──
   if (step === 'result' && ex) {
     const mock = ex.kind === 'mock';
-    const num = (v) => (v === '' || isNaN(Number(v)) ? null : Number(v));
-    const set = (id, k, v) => (vals[id] = { ...(vals[id] || {}), [k]: num(v) });
-    const setMock = (n, i, v) => (mockVals[n] = Object.assign([null, null, null], mockVals[n] || [], { [i]: num(v) }));
+    // 적은 값은 화면을 다시 그리지 않고 바로 기억한다 (칸을 떠날 때 범위를 확인한 값)
+    const set = (id, k, v) => (vals[id] = { ...(vals[id] || {}), [k]: v });
+    const setMock = (n, i, v) => (mockVals[n] = Object.assign([null, null, null], mockVals[n] || [], { [i]: v }));
+    const got = (id, k) => (vals[id] || {})[k] ?? null;
     const close = (withScores) => {
       const mockOut = {};
       if (withScores) for (const [n, v] of Object.entries(mockVals)) if (v && v[2]) mockOut[n] = v;
@@ -52,12 +53,12 @@ export function CycleSheet({ step: first }) {
             ${more ? html`<span class="h c">과목평균</span><span class="h c">석차</span><span class="h c">수강자</span>` : null}
             ${D().subjects.map((s) => [
               html`<span class="sn hue" key=${s.id + 'n'} style=${hue(s.h)}><span class="dot"></span><span class="ell">${more ? s.name.replace('공통', '') : s.name}</span></span>`,
-              html`<input key=${s.id + 's'} class="input pg" inputmode="decimal" aria-label=${s.name + ' 점수'} onChange=${(e) => set(s.id, 'score', e.target.value)} />`,
+              html`<${NumField} key=${s.id + 's'} decimal empty min=${0} max=${100} unit="점" value=${got(s.id, 'score')} label=${s.name + ' 점수'} onCommit=${(n) => set(s.id, 'score', n)} />`,
               ...(more
                 ? [
-                    html`<input key=${s.id + 'a'} class="input pg" inputmode="decimal" aria-label=${s.name + ' 과목평균'} onChange=${(e) => set(s.id, 'avg', e.target.value)} />`,
-                    html`<input key=${s.id + 'r'} class="input pg" inputmode="numeric" aria-label=${s.name + ' 석차'} onChange=${(e) => set(s.id, 'rank', e.target.value)} />`,
-                    html`<input key=${s.id + 'e'} class="input pg" inputmode="numeric" aria-label=${s.name + ' 수강자 수'} onChange=${(e) => set(s.id, 'enrolled', e.target.value)} />`,
+                    html`<${NumField} key=${s.id + 'a'} decimal empty min=${0} max=${100} unit="점" value=${got(s.id, 'avg')} label=${s.name + ' 과목평균'} onCommit=${(n) => set(s.id, 'avg', n)} />`,
+                    html`<${NumField} key=${s.id + 'r'} empty min=${1} max=${2000} unit="등" value=${got(s.id, 'rank')} label=${s.name + ' 석차'} onCommit=${(n) => set(s.id, 'rank', n)} />`,
+                    html`<${NumField} key=${s.id + 'e'} empty min=${1} max=${2000} unit="명" value=${got(s.id, 'enrolled')} label=${s.name + ' 수강자 수'} onCommit=${(n) => set(s.id, 'enrolled', n)} />`,
                   ]
                 : []),
             ])}
@@ -110,7 +111,7 @@ export function CycleSheet({ step: first }) {
             <input class="input" value=${goalName} placeholder="예: 겨울방학 개념 한 바퀴" onInput=${(e) => setGoalName(e.target.value)} aria-label="기간 이름" />`
         : null}
       <span class="label">${goal ? '끝낼 날' : '시험 첫날'}</span>
-      <input class="input" type="date" style="max-width:220px" value=${next.date} onChange=${(e) => e.target.value && setNext({ ...next, date: e.target.value })} aria-label=${goal ? '끝낼 날' : '시험 첫날'} />
+      <${DateField} style="max-width:220px" value=${next.date} min=${C.addDays(today(), 1)} why="오늘 뒤의 날짜를 골라 주세요" label=${goal ? '끝낼 날' : '시험 첫날'} onCommit=${(v) => setNext({ ...next, date: v })} />
       <p class="hint">${next.date > today() ? `${mdws(next.date)} · ${diffDays(today(), next.date)}일 남았어요` : '오늘 뒤의 날짜를 골라 주세요'}</p>
       <p class="hint">시험이 없는 방학이나 평소에는 '끝낼 날만'을 고르면 그날까지 나눠 드려요. 성적 비교만 없어요.</p>
     <//>`;
@@ -126,7 +127,7 @@ export function CycleSheet({ step: first }) {
       <${Steps} n=${idx} of=${total} />
       <p class="sub" style="margin:0 0 14px">지난 범위 바로 다음 쪽부터 같은 길이로 넣어 두었어요. 쪽수만 맞춰 주세요. 공부 순서와 단계 이름은 지난번 그대로 가져가요.</p>
       ${D().subjects.filter((s) => s.books.length).map((s) => html`<div class="bookcard hue" key=${s.id} style=${hue(s.h)}>
-        <div class="hd"><span class="dot"></span>${s.name}<small>${s.stages.length}단계 · ${C.isPsg(s) ? '지문으로 세기' : '쪽으로 세기'}</small></div>
+        <div class="hd"><span class="dot"></span>${s.name}<small>${s.stages.length}단계 · ${C.unitsUsed(s).map((k) => C.unitDef(k).name).join('·') || '쪽'}으로 세기</small></div>
         <${BookEditor} sub=${s} compact lean />
       </div>`)}
       <p class="hint">교재를 더 넣으려면 시작한 뒤 진도 › 과목 › … › 교재와 단계 고치기에서 할 수 있어요.</p>
@@ -136,7 +137,8 @@ export function CycleSheet({ step: first }) {
   // ── 4. 시작 ──
   const cur = D().exam;
   const { tasks, days } = cur ? C.previewPlan(today()) : { tasks: [], days: [] };
-  const sum = C.mix(tasks.map((t) => [C.subById(t.subjectId), C.taskPages(t)]));
+  const sum = C.taskTally(tasks);
+  const su = C.UNITS.filter((u) => sum[u.id]);
   const finish = (plan) => {
     if (plan) C.planAll(today());
     commit();
@@ -147,10 +149,10 @@ export function CycleSheet({ step: first }) {
     <${Steps} n=${idx} of=${total} />
     <p class="sub" style="margin:0 0 14px">${cur ? `남은 분량을 ${mdws(C.lastPlanDay(cur))}까지 날마다 나눠요.` : ''}</p>
     <div class="plan-sum">
-      <div><small>전체 분량</small><b class="num">${sum.p || sum.q}</b>${sum.p || !sum.q ? '쪽' : '지문'}${sum.p && sum.q ? html`<small>+ ${sum.q}지문</small>` : null}</div>
+      <div><small>전체 분량</small><b class="num">${su.length ? sum[su[0].id] : 0}</b>${su.length ? C.unitShort(su[0].id) : '쪽'}${su.length > 1 ? html`<small>+ ${su.slice(1).map((u) => C.amountText(u.id, sum[u.id], true)).join(' · ')}</small>` : null}</div>
       <div><small>나눌 날</small><b class="num">${days.length}</b>일</div>
       <div><small>과목</small><b class="num">${D().subjects.filter((s) => s.stages.length).length}</b>개</div>
     </div>
-    ${D().subjects.map((s) => html`<div class="kv hue" key=${s.id} style=${hue(s.h)}><span class="k row"><span class="dot"></span>${s.name}</span><span class="v">${s.stages.length ? `${s.stages.length}단계 · ${C.amount(s, C.tot(s))}` : html`<span class="muted">교재 없음</span>`}</span></div>`)}
+    ${D().subjects.map((s) => html`<div class="kv hue" key=${s.id} style=${hue(s.h)}><span class="k row"><span class="dot"></span>${s.name}</span><span class="v">${s.stages.length ? `${s.stages.length}단계 · ${C.tallyText(C.totU(s))}` : html`<span class="muted">교재 없음</span>`}</span></div>`)}
   <//>`;
 }

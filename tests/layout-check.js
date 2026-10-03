@@ -97,24 +97,44 @@ function unclickable(dev) {
     const hit = document.elementFromPoint(x, y);
     if (!hit) continue;
     if (hit === el || el.contains(hit)) continue;
-    if (hit.closest('.toast, .fab')) continue; // 잠깐 뜨는 알림·＋ 단추가 덮는 것은 괜찮다
+    if (hit.closest('.toast, .fab, .dock')) continue; // 잠깐 뜨는 알림·＋ 단추·떠 있는 유리 막대가 덮는 것은 괜찮다 (스크롤하면 보임)
     if (el.tagName === 'INPUT' && hit.tagName === 'LABEL') continue;
     bad.push(`못 누름 ${desc(el)} ← ${desc(hit)}`);
   }
   return bad;
 }
 
+const eng = () => C.D().subjects.find((s) => s.name === '공통영어') || C.D().subjects[0];
 const SCREENS = [
   ['오늘', () => C.go('today')],
   ['진도', () => C.go('progress')],
   ['과목', () => C.push('progress', { view: 'subject', id: C.D().subjects[0].id }, true)],
+  ['과목(칸)', () => C.push('progress', { view: 'subject', id: eng().id }, true)],
+  ['칸 채우기', () => C.openSheet({ type: 'record', sub: eng().id, stage: eng().stages[1].id })],
+  ['쪽 적기', () => C.openSheet({ type: 'record', sub: C.D().subjects[0].id, stage: C.D().subjects[0].stages[1].id })],
+  ['교재 고치기', () => C.openSheet({ type: 'edit', id: eng().id })],
+  ['단원 이름', () => C.openSheet({ type: 'labels', id: eng().id, book: eng().books[0].id })],
+  ['과목 추가 › 교재', () => C.openSheet({ type: 'setup', id: C.D().subjects[1].id })],
   ['성적', () => C.go('grades')],
   ['시험 결과', () => C.D().pastExams[0] && C.push('grades', { view: 'exam', id: C.D().pastExams[0].id }, true)],
   ['설정', () => C.openSheet({ type: 'settings' })],
-  ['설정 › 디자인', () => C.openSheet({ type: 'settings', page: 'display' })],
+  ['설정 › 화면', () => C.openSheet({ type: 'settings', page: 'display' })],
+  ['설정 › 글자', () => C.openSheet({ type: 'settings', page: 'text' })],
   ['설정 › 글꼴', () => C.openSheet({ type: 'settings', page: 'font' })],
+  ['설정 › 탭 막대', () => C.openSheet({ type: 'settings', page: 'layout' })],
+  ['설정 › 움직임', () => C.openSheet({ type: 'settings', page: 'motion' })],
+  ['설정 › 오늘 화면', () => C.openSheet({ type: 'settings', page: 'todayView' })],
+  ['설정 › 진도 화면', () => C.openSheet({ type: 'settings', page: 'progressView' })],
+  ['설정 › 달력과 시각', () => C.openSheet({ type: 'settings', page: 'calTime' })],
+  ['설정 › 공부 시간', () => C.openSheet({ type: 'settings', page: 'time' })],
+  ['설정 › 기록 관리', () => C.openSheet({ type: 'settings', page: 'data' })],
+  ['설정 › 정보', () => C.openSheet({ type: 'settings', page: 'about' })],
   ['설정 › 계정', () => C.openSheet({ type: 'settings', page: 'account' })],
   ['할 일', () => C.openSheet({ type: 'task', id: C.tasksOn(C.today())[0].id })],
+  ['할 일 › 더 보기', () => {
+    C.setUI({ open: { ...C.UI().open, taskMore: true } });
+    C.openSheet({ type: 'task', id: C.tasksOn(C.today()).find((t) => t.kind === 'free').id });
+  }],
   ['할 일 추가', () => C.openSheet({ type: 'add' })],
   ['다시 나누기', () => C.openSheet({ type: 'plan' })],
   ['돌아보기', () => C.openSheet({ type: 'week' })],
@@ -160,6 +180,7 @@ export async function run(o = {}) {
   const fonts = o.fonts || FONTS.map((f) => f.id);
   const sizes = o.sizes || ['sm', 'md', 'lg', 'xl'];
   const themes = o.themes || ['paper', 'crisp', 'soft'];
+  const bars = o.bars || ['auto'];
   if (!C.isDemo()) C.loadDemo();
   C.setPrefs({ motion: 'off' });
   const bad = [];
@@ -173,14 +194,17 @@ export async function run(o = {}) {
       for (const theme of themes)
         for (const size of sizes)
           for (const density of size === 'xl' ? ['normal', 'relaxed'] : ['normal']) {
-            C.setPrefs({ theme, size, density });
-            for (const [name, fn] of SCREENS) {
-              if (o.screens && !o.screens.includes(name)) continue;
-              await show(fn);
-              const dev = document.getElementById('device');
-              const tag = `[${font}·${theme}·${size}${density === 'relaxed' ? '·넉넉' : ''}·${C.UI().dev} ${innerWidth}px] ${name}`;
-              for (const b of [...overflows(dev), ...wrapped(dev), ...unclickable(dev)]) bad.push(`${tag}: ${b}`);
-              checked++;
+            for (const bar of bars) {
+              // 아주 크게는 굵은 글씨도 함께 (가장 넓어지는 조합)
+              C.setPrefs({ theme, size, density, tabStyle: bar, bold: size === 'xl' });
+              for (const [name, fn] of SCREENS) {
+                if (o.screens && !o.screens.includes(name)) continue;
+                await show(fn);
+                const dev = document.getElementById('device');
+                const tag = `[${font}·${theme}·${size}${density === 'relaxed' ? '·넉넉' : ''}${size === 'xl' ? '·굵게' : ''}·${C.UI().dev}${bar !== 'auto' ? '·' + bar : ''} ${innerWidth}px] ${name}`;
+                for (const b of [...overflows(dev), ...wrapped(dev), ...unclickable(dev)]) bad.push(`${tag}: ${b}`);
+                checked++;
+              }
             }
           }
     }

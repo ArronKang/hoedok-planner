@@ -229,6 +229,58 @@ async function runInner(level, quiet) {
   check('I2 Esc로 닫힘', !C.UI().sheet);
   await idle('I2 Esc');
 
+  // ── 베타 1.0: 겹쳐 바뀜(M) · 휴대폰 창 기기 스크롤(N) · 유리 막대 렌즈(O) ──
+  C.go('progress');
+  await shown();
+  await idle('M 준비');
+  const subs = C.D().subjects.filter((x) => x.stages.length);
+  C.push('progress', { view: 'subject', id: subs[0].id }, true);
+  await settle();
+  if (level !== 'off') {
+    check('M1 화면을 바꾸면 옛 화면 복사본이 겹쳐 흐려짐', document.querySelectorAll('.m-view').length === 1);
+    C.push('progress', { view: 'subject', id: subs[1].id }, true);
+    await settle();
+    check('M2 연달아 바꿔도 복사본이 쌓이지 않음', document.querySelectorAll('.m-view').length <= 1);
+  } else check('M4 끄기: 겹쳐 바뀜 복사본 없음', document.querySelectorAll('.m-view').length === 0);
+  await idle('M 겹쳐 바뀜');
+  check('M2 끝나면 복사본 0', document.querySelectorAll('.m-view').length === 0);
+  C.setUI({ stacks: { today: [], progress: [], grades: [] } });
+  C.go('today');
+  await idle('M 정리');
+  // N: 손가락 기기의 휴대폰 창
+  const touch = matchMedia('(pointer: coarse)').matches && C.UI().dev === 'phone';
+  if (touch) {
+    C.openSheet({ type: 'todayMenu' });
+    await shown();
+    await wait(60);
+    const sc = document.querySelector('.sheet-layer .sheet-sc');
+    check('N1 창은 기기 스크롤 상자 맨 아래(열린 자리)', !!sc && Math.abs(sc.scrollTop - (sc.scrollHeight - sc.clientHeight)) <= 2);
+    if (sc) {
+      sc.scrollTop = 0;
+      sc.dispatchEvent(new Event('scroll')); // 가려진 창에서는 스크롤 알림이 늦게 오므로 직접
+      await settle();
+      check('N2 끝까지 끌어내리면 닫힘', !C.UI().sheet);
+      check('N2 끌어 닫으면 사라지는 복사본 없음', ghosts() === 0);
+    }
+    await idle('N 끌어 닫기');
+  }
+  // O: 유리 막대
+  const keepBar = C.PR().tabStyle;
+  C.setPrefs({ tabStyle: 'glass' });
+  await settle();
+  if (C.UI().dev === 'phone') {
+    before = snap();
+    C.go('progress');
+    await settle();
+    if (level !== 'off') check('O1 탭을 바꾸면 렌즈가 미끄러짐', fresh('.lens', before).length > 0);
+    else check('O3 끄기: 렌즈 움직임 없음', fresh('.lens', before).length === 0);
+    await idle('O 렌즈');
+    C.go('today');
+    await idle('O 정리');
+  }
+  C.setPrefs({ tabStyle: keepBar });
+  await settle();
+
   // ── 끄기(E1): 아무것도 움직이지 않음 ──
   if (level === 'off') {
     C.openSheet({ type: 'settings' });

@@ -48,7 +48,7 @@ test('앱: 쉬는 요일이어도 그날만 공부할 수 있다', () => {
 
 test('앱: 체크하면 진도가 오르고, 풀면 돌아간다', () => {
   C.loadDemo();
-  const t = C.tasksOn(T()).find((x) => x.kind === 'track' && !C.isPsg(C.subById(x.subjectId)));
+  const t = C.tasksOn(T()).find((x) => x.kind === 'track' && C.taskUnit(x) === 'page');
   const sub = C.subById(t.subjectId);
   const before = C.dn(sub);
   C.toggleTask(t.id);
@@ -66,14 +66,14 @@ test('앱: 지문별 — 건너뛴 번호는 한 할 일로 (지문 4, 7)', () =
   // 오늘 몫은 요일마다 공부 시간이 달라 4, 7 뒤에 더 붙기도 한다
   const units = C.unitsOf(t);
   eq(units.slice(0, 2), [4, 7]);
-  eq(C.trng(t), '지문 ' + units.join(', '));
+  eq(C.trng(t), '지문 ' + C.compress(units));
   eq(C.taskPages(t), units.length);
   const st = C.taskStage(t);
   C.partialTask(t.id, 4, 'tomorrow');
   ok(C.isMarked(st, 4) && !C.isMarked(st, 7));
   const rest = C.D().tasks.find((x) => x.subjectId === eng.id && x.date === C.addDays(T(), 1) && x.from === 7 && (x.moves || []).length);
   ok(rest, '남은 지문 7이 내일로');
-  eq(C.trng(rest), '지문 ' + units.slice(1).join(', '));
+  eq(C.trng(rest), '지문 ' + C.compress(units.slice(1)));
 });
 
 test('앱: 격자 칸을 다 채우면 그 할 일도 끝', () => {
@@ -156,7 +156,7 @@ test('앱: 끝낼 날은 그날까지 나누고, 성적에는 안 남는다', ()
 
 test('앱: 다른 기기에서 끝낸 할 일은 진도 칸에도 채운다', () => {
   C.loadDemo();
-  const t = C.tasksOn(T()).find((x) => x.kind === 'track' && !C.isPsg(C.subById(x.subjectId)));
+  const t = C.tasksOn(T()).find((x) => x.kind === 'track' && C.taskUnit(x) === 'page');
   const st = C.taskStage(t);
   const before = st.upto;
   t.status = 'done'; // 다른 기기에서 온 할 일 기록 (과목 기록은 옛것)
@@ -340,4 +340,188 @@ test('예시: 표시가 생기기 전에 연 예시도 알아본다 (진짜 기�
   C.resetAll();
   C.D().exam = { id: C.uid(), name: '2학기 중간고사', kind: 'mid', date: C.addDays(T(), 10), start: T() };
   eq(C.looksLikeDemo(C.D()), false);
+});
+
+// ─────────── 베타 1.0: 교재마다 단위 ───────────
+
+test('단위: 단원 이름 만들기·적은 글 읽기', () => {
+  eq(C.genLabels(1, 2, 3), ['1-1', '1-2', '1-3', '2-1', '2-2', '2-3']);
+  eq(C.genLabels(3, 2, 0), ['3', '4']);
+  eq(C.parseLabels('1-1~1-3, 2-1~2-2, 쉬어가기'), ['1-1', '1-2', '1-3', '2-1', '2-2', '쉬어가기']);
+  eq(C.parseLabels('L1~L3\n춘향전'), ['L1', 'L2', 'L3', '춘향전']);
+  eq(C.parseLabels('1-1~4'), ['1-1', '1-2', '1-3', '1-4']);
+  eq(C.parseLabels(' , ,'), []);
+});
+
+test('단위: 영어 교과서는 단원 이름으로 보인다 (1-1 ~ 1-3)', () => {
+  C.loadDemo();
+  const eng = C.D().subjects.find((s) => s.name === '공통영어');
+  const b = eng.books[0];
+  eq(C.bookUnit(eng, b), 'ch');
+  eq(C.rangeText(eng, b, 1, 3), '1-1 ~ 1-3');
+  eq(C.rangeText(eng, b, 1, 1), '1-1');
+  eq(C.rangeText(eng, b, 1, 6, [1, 2, 5, 6]), '1-1 ~ 1-2, 2-1 ~ 2-2');
+  eq(C.spanText(eng, b, 1, 8), '1-1 ~ 2-4');
+  eq(C.itemName(eng, b, 5), '2-1');
+  eq(C.rangeText(eng, eng.books[1], 3, 5), '지문 3–5');
+  eq(C.amountText('ch', 3), '단원 3개');
+  eq(C.tallyText({ psg: 4, page: 12, ch: 2 }), '12쪽 · 4지문 · 단원 2개');
+});
+
+test('단위: 예전 기록(과목이 지문으로 세기)도 그대로 읽는다', () => {
+  const sub = { id: 'x', name: '영어', unit: 'passage', books: [{ id: 'b', name: '부교재', from: 1, to: 10 }], stages: [] };
+  eq(C.bookUnit(sub, sub.books[0]), 'psg');
+  ok(C.isCell(sub, sub.books[0]));
+  const st = C.buildStages(sub.books, 'each', true);
+  ok(Array.isArray(st[0].marks), '칸 기록이 생김');
+  eq(C.bookUnit({ books: [] }, { id: 'c', from: 1, to: 3 }), 'page');
+});
+
+test('단위: 교재 범위를 바꾸면 단계도 함께 (한 진도는 범위 안이면 그대로)', () => {
+  C.loadDemo();
+  const soc = C.D().subjects.find((s) => s.name === '통합사회');
+  const b = soc.books[1]; // 평가문제집 1–40, 둘째 단계 30쪽까지
+  const st = soc.stages.find((s) => s.bookId === b.id && s.upto != null);
+  eq([st.from, st.to, st.upto], [1, 40, 30]);
+  C.setBookRange(soc, b, 20, 80);
+  eq([st.from, st.to, st.upto], [20, 80, 30]);
+  eq(C.done(st), 11);
+  C.setBookRange(soc, b, 41, 90);
+  eq([st.from, st.to, st.upto], [41, 90, null]);
+});
+
+test('단위: 쪽 ↔ 문제로 바꿔도 한 만큼은 남는다', () => {
+  C.loadDemo();
+  const soc = C.D().subjects.find((s) => s.name === '통합사회');
+  const b = soc.books[1];
+  const st = soc.stages.find((s) => s.bookId === b.id && s.upto != null);
+  C.setBookUnit(soc, b, 'q');
+  eq(C.done(st), 30);
+  ok(C.isMarked(st, 30) && !C.isMarked(st, 31));
+  C.toggleCell(soc, st, 35);
+  C.setBookUnit(soc, b, 'page');
+  eq(st.upto, 30, '처음부터 이어진 데까지');
+  eq(st.marks, undefined);
+});
+
+test('단위: 단원 이름을 고쳐도 채운 칸은 이름으로 따라간다', () => {
+  C.loadDemo();
+  const eng = C.D().subjects.find((s) => s.name === '공통영어');
+  const b = eng.books[0];
+  const st = eng.stages.find((s) => s.bookId === b.id && s.marks.length && s.marks.length < 8); // 1-1, 1-2, 1-3 채움
+  eq(st.marks, [1, 2, 3]);
+  C.setBookLabels(eng, b, ['0-1', ...b.labels]);
+  eq(st.marks, [2, 3, 4]);
+  eq(C.rangeText(eng, b, 2, 4), '1-1 ~ 1-3');
+  eq([b.from, b.to, st.to], [1, 9, 9]);
+});
+
+test('단위: 단위가 섞인 과목은 걸리는 시간으로 비율을 낸다', () => {
+  C.loadDemo();
+  const sub = C.newSubject('정보');
+  sub.books = [C.newBook('교과서', 'page'), C.newBook('인강')];
+  sub.books[0].from = 1;
+  sub.books[0].to = 100;
+  eq(C.bookUnit(sub, sub.books[1]), 'lec');
+  sub.stages = C.stagesFor(sub, 'each');
+  sub.stages[0].upto = 50;
+  // 쪽 3분 × 100 + 강 40분 × 20 → 한 것 150분 / 1100분
+  eq(Math.round(C.pct(sub) * 1000), Math.round((150 / 1100) * 1000));
+  eq(C.tallyText(C.totU(sub)), '100쪽 · 20강');
+  const f = C.facts(sub);
+  eq(f.unit, null);
+  eq(f.remT, { page: 50, lec: 20 });
+  // 단위가 하나면 개수 그대로
+  sub.stages = [sub.stages[0]];
+  eq(C.pct(sub), 0.5);
+});
+
+test('단위: 나누기 — 단위가 섞여도 남은 분량이 빠짐없이, 시간이 고르게', () => {
+  C.loadDemo();
+  const sub = C.newSubject('정보');
+  sub.books = [C.newBook('교과서', 'page'), C.newBook('인강')];
+  sub.books[0].to = 60;
+  sub.stages = C.stagesFor(sub, 'each');
+  C.D().subjects.push(sub);
+  C.planSubject(sub, T());
+  const mine = C.D().tasks.filter((t) => t.subjectId === sub.id && t.kind === 'track');
+  eq(mine.reduce((a, t) => a + C.taskPages(t), 0), 60 + 20);
+  // 날마다 예상 시간이 크게 치우치지 않는다 (한 강이 40분이라 아무리 고르게 해도 40분 차이는 남는다)
+  const by = {};
+  for (const t of mine) by[t.date] = (by[t.date] || 0) + C.taskMinutes(t);
+  const vals = Object.values(by);
+  ok(vals.length > 3);
+  ok(Math.max(...vals) / Math.max(1, Math.min(...vals.slice(0, -1))) < 4, '시간이 한쪽으로 몰리지 않음 ' + vals.join(','));
+});
+
+test('단위: 적은 글에서 진도 찾기 (단원 이름 · 지문 · 쪽)', () => {
+  C.loadDemo();
+  const eng = C.D().subjects.find((s) => s.name === '공통영어');
+  const l1 = C.parseLink('교과서 2-1~2-3 다시 읽기', eng);
+  ok(l1, '단원 이름');
+  eq([l1.from, l1.to], [5, 7]);
+  eq(C.bookOf(eng, l1.stage).name, '교과서 본문');
+  const l2 = C.parseLink('지문 13-15 복습', eng);
+  eq(C.bookOf(eng, l2.stage).name, '부교재 지문');
+  eq([l2.from, l2.to], [13, 15]);
+  const soc = C.D().subjects.find((s) => s.name === '통합사회');
+  const l3 = C.parseLink('평가문제집 p.31-35', soc);
+  eq([l3.from, l3.to], [31, 35]);
+  eq(C.parseLink('영단어 Day 12 외우기', eng), null);
+  eq(C.parseLink('수행평가 2회 연습', soc), null);
+});
+
+test('단위: 다음 시험 범위 — 단원은 큰 번호를 넘기고, 지문은 1번부터', () => {
+  C.loadDemo();
+  const eng = C.D().subjects.find((s) => s.name === '공통영어');
+  C.shiftScopes();
+  eq(eng.books[0].labels.slice(0, 2), ['3-1', '3-2']);
+  eq(eng.books[0].labels[7], '4-4');
+  eq([eng.books[1].from, eng.books[1].to], [1, 16]);
+});
+
+test('단위: 일부만 — 칸 교재는 한 칸을 골라서', () => {
+  C.loadDemo();
+  const eng = C.D().subjects.find((s) => s.name === '공통영어');
+  const t = C.D().tasks.find((x) => x.subjectId === eng.id && x.date === T() && x.kind === 'track');
+  const us = C.unitsOf(t);
+  const st = C.taskStage(t);
+  C.partialTask(t.id, null, 'tomorrow', [us[1]]);
+  ok(C.isMarked(st, us[1]) && !C.isMarked(st, us[0]));
+  eq(C.unitsOf(t), [us[1]]);
+  const rest = C.D().tasks.find((x) => x.stageId === st.id && x.date === C.addDays(T(), 1) && (x.moves || []).length);
+  eq(C.unitsOf(rest), us.filter((u) => u !== us[1]));
+});
+
+test('숫자 칸: 범위 — 시작을 끝보다 크게 치면 끝이 같은 길이만큼 따라간다', () => {
+  eq(C.fitRange(1, 60, 'from', 20), [20, 60]);
+  eq(C.fitRange(1, 60, 'from', 70), [70, 129]);
+  eq(C.fitRange(70, 129, 'to', 120), [70, 120]);
+  eq(C.fitRange(40, 90, 'to', 30), [1, 30], '끝을 시작보다 작게 → 시작이 같은 길이만큼 앞으로 (1보다 작아지지 않게)');
+  eq(C.fitRange(1, 30, 'to', 30), [1, 30]);
+});
+
+test('단원 이름: 줄인 글로 바꿨다가 되돌려도 같다', () => {
+  for (const L of [C.genLabels(1, 2, 3), ['1-1', '1-3', '2-1'], ['L1', 'L2', 'L3', '춘향전'], ['1', '2', '3', '4'], ['01', '02', '03']]) eq(C.parseLabels(C.labelsText(L)), L);
+  eq(C.labelsText(C.genLabels(1, 2, 3)), '1-1~1-3, 2-1~2-3');
+});
+
+test('으로/로: 받침에 맞게', () => {
+  eq(C.ro('20쪽'), '20쪽으로');
+  eq(C.ro('12'), '12로');
+  eq(C.ro('30'), '30으로');
+  eq(C.ro('9등급'), '9등급으로');
+  eq(C.ro('100점'), '100점으로');
+  eq(C.ro('50%'), '50%로');
+  eq(C.ro('7'), '7로');
+});
+
+test('단원 이름 모양 알아보기 · 과목에 맞는 교재 제안', () => {
+  eq(C.labelsShape(C.genLabels(3, 2, 4)), { start: 3, big: 2, small: 4 });
+  eq(C.labelsShape(['1', '2', '3']), { start: 1, big: 3, small: 0 });
+  eq(C.labelsShape(['1-1', '1-3']), null);
+  eq(C.labelsShape(['L1']), null);
+  ok(!C.suggestBooks('공통국어').includes('쎈'), '국어에 쎈을 권하지 않음');
+  ok(C.suggestBooks('공통수학').includes('쎈'));
+  ok(C.suggestBooks('공통영어').includes('부교재 지문'));
 });
