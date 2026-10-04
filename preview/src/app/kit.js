@@ -313,42 +313,39 @@ export function Sheet({ title, children, footer, tall, wide, onClose, step }) {
   const st = useRef({ ready: false, touching: false, done: false });
   const native = UI().dev === 'phone' && touchy();
   // 처음 열릴 때 한 번: 배경은 서서히 어두워지고 창은 아래에서 올라온다 (창에서 창으로 넘어갈 때는 가만히)
+  // 스크롤 상자는 거꾸로 쌓는다(column-reverse) → 처음부터 맨 아래(열린 자리)에 있다.
+  // 전에는 열자마자 scrollTop을 맨 아래로 옮겼는데, 아이폰은 그 위치를 한 박자 늦게 그려서 창이 위쪽에 잠깐 튀어 보였다.
   useLayoutEffect(() => {
     const s = sc.current;
-    if (s) s.scrollTop = s.scrollHeight; // 열린 자리(맨 아래)에서 시작
-    st.current.ready = true; // 이 뒤로 맨 위(닫힌 자리)에 닿으면 닫는다
+    if (s) {
+      const g = s.querySelector('.sheet-gap');
+      if (g) g.style.height = s.clientHeight + 'px'; // 창 위 빈 곳 = 화면 높이 (퍼센트 높이를 믿지 않는다)
+    }
+    st.current.ready = true;
     M.sheetIn(veil.current, box.current);
   }, []);
-  // 창 내용이 커지거나 작아져도 열린 자리에 붙어 있게 (끌고 있을 때는 그대로)
   useEffect(() => {
-    const s = sc.current, b = box.current;
-    if (!s || !b || typeof ResizeObserver === 'undefined') return;
-    const ro = new ResizeObserver(() => {
-      if (!st.current.touching && !st.current.done && st.current.ready) s.scrollTop = s.scrollHeight;
-    });
-    ro.observe(b);
-    // 손가락이 닿아 있는지 (스크롤을 막지 않도록 passive로 직접 듣는다)
-    const on = () => (st.current.touching = true);
-    const off = () => (st.current.touching = false);
-    const opt = { passive: true };
-    s.addEventListener('touchstart', on, opt);
-    s.addEventListener('touchend', off, opt);
-    s.addEventListener('touchcancel', off, opt);
-    return () => {
-      ro.disconnect();
-      s.removeEventListener('touchstart', on, opt);
-      s.removeEventListener('touchend', off, opt);
-      s.removeEventListener('touchcancel', off, opt);
+    const s = sc.current;
+    if (!s) return;
+    const fit = () => {
+      const g = s.querySelector('.sheet-gap');
+      if (g) g.style.height = s.clientHeight + 'px';
     };
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
   }, []);
+  /** 끌어내린 정도 0(열림)…1(닫힘). 거꾸로 쌓은 상자는 위로 갈수록 scrollTop이 음수 */
+  const pulled = (s) => {
+    const max = Math.max(1, s.scrollHeight - s.clientHeight);
+    return Math.max(0, Math.min(1, Math.abs(s.scrollTop) / max));
+  };
   const onScroll = () => {
-    const s = sc.current, b = box.current, v = veil.current;
-    if (!s || !b || st.current.done) return;
-    const h = b.offsetHeight || 1;
-    const shown = Math.max(0, Math.min(1, s.scrollTop / Math.max(1, s.scrollHeight - s.clientHeight)));
-    if (v) v.style.opacity = shown >= 0.999 ? '' : String(shown);
+    const s = sc.current, v = veil.current;
+    if (!s || st.current.done) return;
+    const k = pulled(s);
+    if (v) v.style.opacity = k <= 0.001 ? '' : String(1 - k);
     // 끝까지 끌어내리면 닫는다 (이미 화면 밖이라 사라지는 움직임은 없이)
-    if (st.current.ready && s.scrollTop <= Math.min(2, h * 0.01)) {
+    if (st.current.ready && k >= 0.995) {
       st.current.done = true;
       M.skipExit();
       close();
@@ -392,8 +389,8 @@ export function Sheet({ title, children, footer, tall, wide, onClose, step }) {
   return html`<div>
     <div class="veil" ref=${veil}></div>
     <div class=${'sheet-sc' + (tall ? ' tall' : '')} ref=${sc} onScroll=${onScroll}>
-      <div class="sheet-gap" onClick=${close}></div>
       ${sheet}
+      <div class="sheet-gap" onClick=${close}></div>
     </div>
   </div>`;
 }

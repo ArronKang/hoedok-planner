@@ -129,17 +129,26 @@ function Phone() {
   const back = () => C.pop(tab);
   const view = useRef(null);
   const lens = useRef(null);
+  const bubble = useRef(null);
   const glass = glassBar();
   useCross(view, `${tab}|${entryKey(t)}|${tab === 'today' ? C.viewDay() : ''}`, 4);
   const idx = TABS.findIndex(([id]) => id === tab);
-  // 유리 막대: 고른 탭 뒤의 둥근 렌즈가 새 탭으로 미끄러지며 잠깐 늘어났다 돌아온다
+  // 유리 막대 (아이폰 전화 앱처럼): 쉴 때는 고른 탭 뒤의 회색 알약.
+  // 탭을 바꾸면 알약이 막대보다 큰 투명 유리 방울로 떠올라 새 탭으로 미끄러지고, 다시 알약으로 내려앉는다.
   const lastIdx = useRef(idx);
   useLayoutEffect(() => {
     const from = lastIdx.current;
     lastIdx.current = idx;
     if (!glass || from === idx || from < 0 || idx < 0 || !lens.current) return;
     const d = (from - idx) * 100;
-    M.play(lens.current, [{ transform: `translateX(${d}%) scaleX(1)` }, { transform: `translateX(${d * 0.45}%) scaleX(1.18)`, offset: 0.45 }, { transform: 'translateX(0) scaleX(1)' }], 420, 'cubic-bezier(.3, .9, .3, 1)');
+    const ease = 'cubic-bezier(.32, .72, .2, 1)';
+    M.play(lens.current, [{ opacity: 1, transform: `translateX(${d}%)` }, { opacity: 0, transform: `translateX(${d}%)`, offset: 0.14 }, { opacity: 0, transform: 'translateX(0)', offset: 0.8 }, { opacity: 1, transform: 'translateX(0)' }], 560, 'linear');
+    M.play(bubble.current, [
+      { opacity: 0, transform: `translateX(${d}%) scale(1, 1)` },
+      { opacity: 1, transform: `translateX(${d}%) scale(1.16, 1.3)`, offset: 0.16 },
+      { opacity: 1, transform: 'translateX(0) scale(1.16, 1.3)', offset: 0.74 },
+      { opacity: 0, transform: 'translateX(0) scale(1, 1)' },
+    ], 560, ease);
   }, [idx]);
   let main;
   if (tab === 'today') main = html`<${TodayScreen} />`;
@@ -155,7 +164,7 @@ function Phone() {
       <div class="view glass-view" ref=${view}>${main}</div>
       <div class=${'dock' + (labels ? '' : ' bare')}>
         <nav class="tabbar glass" aria-label="주요 화면" style=${{ '--n': TABS.length + 1, '--i': Math.max(0, idx) }}>
-          ${idx >= 0 ? html`<i class="lens" ref=${lens} aria-hidden="true"></i>` : null}
+          ${idx >= 0 ? html`<i class="lens" ref=${lens} aria-hidden="true"></i><i class="lens-glass" ref=${bubble} aria-hidden="true"></i>` : null}
           ${btns}
         </nav>
         <button class="dock-add" aria-label="할 일 추가" onClick=${addTask}><${Icon} n="plus" w=${2.2} /></button>
@@ -338,17 +347,43 @@ let lastBg = '';
 function syncChrome() {
   const dev = document.getElementById('device');
   if (!dev) return;
-  const bg = getComputedStyle(dev).getPropertyValue('--bg').trim();
-  if (!bg || bg === lastBg) return;
-  lastBg = bg;
+  const cs = getComputedStyle(dev);
+  const bg = cs.getPropertyValue('--bg').trim();
+  const key = bg + cs.getPropertyValue('--accent');
+  if (!bg || key === lastBg) return;
+  lastBg = key;
   document.body.style.background = bg;
   const m = document.querySelector('meta[name="theme-color"]');
   if (m) m.setAttribute('content', bg);
   try {
     localStorage.setItem(ns('hoedok.bg'), bg); // 다음 실행 첫 화면 색
+    localStorage.setItem(ns('hoedok.ink'), cs.getPropertyValue('--ink').trim()); // 시작 화면 글자·칸 색
+    localStorage.setItem(ns('hoedok.ac'), cs.getPropertyValue('--accent').trim());
   } catch {
     /* 무시 */
   }
+}
+
+/**
+ * 시작 화면 걷어 내기: 칸이 채워지고 이름이 다 써진 뒤(앱을 연 지 약 1.3초) 흐려지며 앱이 떠오른다.
+ * 앱을 늦게 불러왔으면 바로, 누르면 바로, 움직임을 껐으면 기다리지 않는다.
+ */
+function hideSplash() {
+  const sp = document.getElementById('splash');
+  if (!sp) return;
+  const still = document.documentElement.classList.contains('sp-still') || !M.on();
+  const f = parseFloat(getComputedStyle(sp).getPropertyValue('--f')) || 1;
+  const go = () => {
+    if (sp.dataset.gone) return;
+    sp.dataset.gone = '1';
+    if (still) return sp.remove();
+    sp.classList.add('out');
+    M.play(document.getElementById('device'), [{ opacity: 0, transform: 'translateY(14px) scale(.985)' }, { opacity: 1, transform: 'none' }], 460, M.EASE_SHEET);
+    setTimeout(() => sp.remove(), 460 * f + 80);
+  };
+  if (still) return go();
+  sp.addEventListener('pointerdown', go, { once: true });
+  setTimeout(go, Math.max(0, 1300 * f - performance.now()));
 }
 
 /** 고른 글꼴을 저장소를 열기 전에 먼저 부른다 → 첫 화면부터 그 글꼴 */
@@ -387,7 +422,7 @@ async function boot() {
   const root = document.getElementById('app');
   root.textContent = '';
   render(html`<${App} />`, root);
-  M.play(document.getElementById('device'), [{ opacity: 0 }, { opacity: 1 }], 200);
+  hideSplash();
   // 아이폰 Safari는 터치 신호를 받는 곳이 있어야 눌림 표시(:active)를 보여 준다
   document.addEventListener('touchstart', () => {}, { passive: true });
   // 두 손가락으로 확대하지 않는다 (아이폰 Safari는 화면 설정만으로는 안 막힌다). 글자 크기는 설정 › 글자에서.
