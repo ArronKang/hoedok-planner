@@ -152,11 +152,23 @@ export function TodayScreen({ compact }) {
   const list = hideDone ? all.filter((t) => t.status !== 'done') : all;
   let body;
   if (!all.length) {
+    // 할 일이 없을 때: 왜 없는지에 맞춰 다음에 할 일 하나를 크게 (막연히 '＋를 눌러 보세요' 대신)
+    const subs = D().subjects;
+    const noBook = subs.find((s) => !s.stages.length);
+    const hasStages = subs.some((s) => s.stages.length);
+    const plannable = hasStages && ex && !C.examDay() && day >= td;
     body = html`<div class="empty">
       <h3>${day === td ? '오늘' : mdws(day)} 할 일이 없어요</h3>
-      ${D().subjects.some((s) => s.stages.length) && ex && !C.examDay()
-        ? html`<p>남은 분량을 ${C.endWord()} ${C.isGoal() ? '' : '전날'}까지 나눠서 날마다 할 양을 넣을 수 있어요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'plan' })}>${C.endWord()}까지 나눠 주기</button>`
-        : html`<p>${isPad() ? '위의 ＋' : '아래 ＋'}로 할 일을 넣어 보세요.</p>`}
+      ${!subs.length
+        ? html`<p>먼저 준비할 과목을 넣어 주세요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'addSubject' })}>과목 넣기</button>`
+        : !hasStages
+          ? html`<p>과목마다 쓰는 교재와 시험 범위를 넣으면 날마다 할 양이 저절로 생겨요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'setup', id: noBook.id })}>${noBook.name} 교재 넣기</button>`
+          : plannable
+            ? html`<p>남은 분량을 ${C.endWord()} ${C.isGoal() ? '' : '전날'}까지 나눠서 날마다 할 양을 넣을 수 있어요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'plan' })}>${C.endWord()}까지 나눠 주기</button>`
+            : !ex
+              ? html`<p>다음 시험이나 끝낼 날을 정하면 날마다 할 양을 나눠 드려요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'cycle', step: 'next' })}>시험 정하기</button>`
+              : null}
+      <button class="btn ghost" style="margin-top:6px" onClick=${() => openSheet({ type: 'add' })}>할 일 직접 넣기</button>
     </div>`;
   } else if (!list.length) {
     body = html`<div class="empty small"><h3>다 끝냈어요</h3><p>끝낸 ${doneN}개는 숨겨 두었어요.</p></div>`;

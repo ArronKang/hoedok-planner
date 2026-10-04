@@ -29,11 +29,32 @@
           document.documentElement.style.background = bg;
           document.querySelector('meta[name="theme-color"]').setAttribute('content', bg);
         }
+        // 시작 화면 색·속도: 지난번 디자인 색과 움직임 설정 (미리 보기는 저장 이름 앞에 preview.)
+        var P = document.documentElement.hasAttribute('data-preview') ? 'preview.' : '';
+        var st = document.documentElement.style;
+        if (bg) st.setProperty('--sp-bg', bg);
+        var ink = localStorage.getItem(P + 'hoedok.ink'), ac = localStorage.getItem(P + 'hoedok.ac');
+        if (ink) st.setProperty('--sp-ink', ink);
+        if (ac) st.setProperty('--sp-ac', ac);
+        var dev = JSON.parse(localStorage.getItem(P + 'hoedok.device.v1') || 'null') || {};
+        var lv = dev.motion || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'off' : 'normal');
+        st.setProperty('--sp-f', lv === 'slow' ? 1.4 : lv === 'fast' ? 0.6 : 1);
+        if (lv === 'off') document.documentElement.classList.add('sp-still');
       } catch (e) {}
     </script>
   </head>
   <body>
-    <div id="app"><div class="boot">불러오는 중…</div></div>
+    <!-- 시작 화면: 진도 칸이 하나씩 채워지고 이름이 써지듯 나타난다 (src/app/main.js가 앱을 그린 뒤 걷어 낸다) -->
+    <div class="splash" id="splash" aria-hidden="true">
+      <svg class="sp-mark" viewBox="0 0 222 44" width="200" height="40">
+        <rect class="sp-c" style="--k: 0" x="2" y="4" width="62" height="36" rx="9" pathLength="100" />
+        <rect class="sp-c" style="--k: 1" x="72" y="4" width="46" height="36" rx="9" pathLength="100" />
+        <rect class="sp-c" style="--k: 2" x="126" y="4" width="40" height="36" rx="9" pathLength="100" />
+        <rect class="sp-c sp-last" style="--k: 3" x="174" y="4" width="46" height="36" rx="9" pathLength="100" />
+      </svg>
+      <div class="sp-name">회독 플래너</div>
+    </div>
+    <div id="app"></div>
     <noscript>이 앱은 자바스크립트가 필요해요.</noscript>
     <script type="module" src="src/app/main.js"></script>
   </body>

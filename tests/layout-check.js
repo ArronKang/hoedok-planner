@@ -88,7 +88,8 @@ function unclickable(dev) {
       const cs = getComputedStyle(p);
       if (cs.overflowX === 'visible' && cs.overflowY === 'visible') continue;
       const b = p.getBoundingClientRect();
-      if (x < b.left || x > b.right || y < b.top || y > b.bottom) {
+      // 가장자리에 걸친 것(가운데가 테두리 2px 안)은 스크롤해야 보이는 것으로 친다
+      if (x < b.left + 2 || x > b.right - 2 || y < b.top + 2 || y > b.bottom - 2) {
         vis = false;
         break;
       }

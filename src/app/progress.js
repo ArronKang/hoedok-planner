@@ -29,6 +29,9 @@ export function ProgressList() {
   const sel = C.top('progress');
   const pad = isPad();
   const units = C.UNITS.filter((u) => o.all[u.id]);
+  // 교재를 넣은 과목만 카드로, 안 넣은 과목은 아래 한 줄에 모은다 (주황 안내 카드가 여러 장 쌓이지 않게)
+  const ready = D().subjects.filter((s) => s.stages.length);
+  const waiting = D().subjects.filter((s) => !s.stages.length);
   return html`<div class="screen">
     <header class="head">
       <div class="t"><span class="kicker">${ex ? `${mdws(ex.date)}${C.isGoal(ex) ? ' 끝낼 날' : ''}` : '다음 시험 안 정함'}</span><h1>${ex ? ex.name : '진도'}</h1></div>
@@ -44,7 +47,16 @@ export function ProgressList() {
         <div class="divider"></div>`
       : null}
     <div class="scroll"><div class="body" style="padding-top:14px">
-      ${D().subjects.map((s, i) => html`<${SubjectRow} key=${s.id} sub=${s} current=${pad && ((sel && sel.id === s.id) || (!sel && i === 0))} />`)}
+      ${ready.map((s, i) => html`<${SubjectRow} key=${s.id} sub=${s} current=${pad && ((sel && sel.id === s.id) || (!sel && i === 0))} />`)}
+      ${!ready.length && waiting.length
+        ? html`<div class="empty small"><h3>교재를 넣으면 진도가 생겨요</h3><p>과목을 누르고 쓰는 교재와 시험 범위를 넣으면, 1회독·2회독 단계와 날짜별 할 양이 저절로 만들어져요.</p></div>`
+        : null}
+      ${waiting.length
+        ? html`<div class="waiting">
+            <div class="sec-title" style="margin-top:4px">교재를 아직 안 넣은 과목<em>눌러서 넣기</em></div>
+            <div class="chips">${waiting.map((s) => html`<button key=${s.id} class="chip hue add" style=${hue(s.h)} onClick=${() => openSheet({ type: 'setup', id: s.id })}><span class="dot"></span>${s.name}</button>`)}</div>
+          </div>`
+        : null}
       <button class="addline" onClick=${() => openSheet({ type: 'addSubject' })}><${Icon} n="plus" s=${20} />과목 추가</button>
     </div></div>
   </div>`;
@@ -490,6 +502,7 @@ export function SetupSheet({ id }) {
     }}>단계 만들기</button>`}
   >
     <p class="sub" style="margin:0 0 12px">눌러서 넣고, 시험 범위만 맞춰 주세요. 쪽이 아니라 지문·문제·단원으로 세는 교재는 단위를 눌러 바꿔요.</p>
+    ${sub.books.length ? null : html`<p class="note-line">아래에서 쓰는 교재를 눌러 넣어 주세요. 목록에 없으면 '직접 적기'에 이름을 적고 완료를 누르면 돼요.</p>`}
     <${BookEditor} sub=${sub} back=${{ type: 'setup', id }} />
     ${sub.books.length
       ? html`<span class="label" style="margin-top:22px">공부 순서</span>

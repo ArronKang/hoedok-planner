@@ -446,12 +446,19 @@ test('단위: 나누기 — 단위가 섞여도 남은 분량이 빠짐없이, �
   C.planSubject(sub, T());
   const mine = C.D().tasks.filter((t) => t.subjectId === sub.id && t.kind === 'track');
   eq(mine.reduce((a, t) => a + C.taskPages(t), 0), 60 + 20);
-  // 날마다 예상 시간이 크게 치우치지 않는다 (한 강이 40분이라 아무리 고르게 해도 40분 차이는 남는다)
+  // 날마다 예상 시간이 그날 남는 공부 시간에 비례 (요일마다 시간이 달라도). 한 강이 40분이라 그만큼은 어긋날 수 있다
   const by = {};
   for (const t of mine) by[t.date] = (by[t.date] || 0) + C.taskMinutes(t);
-  const vals = Object.values(by);
-  ok(vals.length > 3);
-  ok(Math.max(...vals) / Math.max(1, Math.min(...vals.slice(0, -1))) < 4, '시간이 한쪽으로 몰리지 않음 ' + vals.join(','));
+  const days = C.planDays(T(), C.planEnd(C.D().exam));
+  const W = days.reduce((a, x) => a + x.w, 0);
+  const total = Object.values(by).reduce((a, b) => a + b, 0);
+  ok(Object.keys(by).length > 3);
+  let acc = 0, got = 0;
+  for (const x of days) {
+    acc += x.w;
+    got += by[x.d] || 0;
+    ok(Math.abs(got - (total * acc) / W) <= 40 + 3 * 2, `${x.d}까지 누적 ${got}분 / 목표 ${Math.round((total * acc) / W)}분`);
+  }
 });
 
 test('단위: 적은 글에서 진도 찾기 (단원 이름 · 지문 · 쪽)', () => {

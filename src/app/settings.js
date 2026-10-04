@@ -17,7 +17,7 @@ import { syncState } from '../sync/state.js';
 const { D, PR, setPrefs, openSheet, closeSheet, commit, toast, minutes, WD } = C;
 
 /** 이 앱의 버전 (설정 › 정보) */
-export const APP_VERSION = '베타 1.0';
+export const APP_VERSION = '베타 1.1';
 export const APP_DATE = '2026년 10월';
 
 const THEMES = [

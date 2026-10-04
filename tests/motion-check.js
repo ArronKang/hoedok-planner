@@ -254,9 +254,10 @@ async function runInner(level, quiet) {
     await shown();
     await wait(60);
     const sc = document.querySelector('.sheet-layer .sheet-sc');
-    check('N1 창은 기기 스크롤 상자 맨 아래(열린 자리)', !!sc && Math.abs(sc.scrollTop - (sc.scrollHeight - sc.clientHeight)) <= 2);
+    // 거꾸로 쌓은 상자: 열린 자리 = scrollTop 0, 닫힌 자리 = -(최대)
+    check('N1 창은 처음부터 열린 자리 (위치를 옮기지 않아도)', !!sc && Math.abs(sc.scrollTop) <= 2 && getComputedStyle(sc).flexDirection === 'column-reverse');
     if (sc) {
-      sc.scrollTop = 0;
+      sc.scrollTop = -(sc.scrollHeight - sc.clientHeight);
       sc.dispatchEvent(new Event('scroll')); // 가려진 창에서는 스크롤 알림이 늦게 오므로 직접
       await settle();
       check('N2 끝까지 끌어내리면 닫힘', !C.UI().sheet);
