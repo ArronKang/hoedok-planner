@@ -339,3 +339,32 @@ export function glide(lensEl, bubbleEl, from, lifted = false, hold = false, to =
     /* 무시 */
   }
 }
+
+/**
+ * 탭 막대의 '채움 칸' 옮기기 (베타 2.1 — 이 앱만의 모양: 진도 칸이 채워지듯 고른 탭 칸이 채워진다).
+ * 용수철로 미끄러지고, 빠를수록 가는 방향으로 조금 늘어난다. 떠오르거나 투명해지지 않는다.
+ * from·to: 그 칸 자리 기준 px. hold: 누르고 있는 동안 멈춰 있음
+ */
+export function slide(el, from, to = 0, hold = false) {
+  if (!el) return;
+  if (el.getAnimations) for (const a of el.getAnimations()) a.cancel();
+  el.style.transform = '';
+  if (!on() || (from === to && !hold)) return;
+  const w = el.offsetWidth || 1;
+  const S = spring(0.34 + 0.05 * Math.min(3, Math.abs(from - to) / w), 0.78);
+  const n = Math.max(2, Math.ceil(S.dur * 60));
+  const frames = [];
+  for (let i = 0; i <= n; i++) {
+    const t = (i / n) * S.dur;
+    const s = S.at(t);
+    const x = (to + (from - to) * (1 - s.x)).toFixed(2);
+    const str = Math.min(0.14, (Math.abs(s.v * (from - to)) / w) * 0.012);
+    frames.push({ offset: i / n, transform: `translateX(${x}px) scaleX(${(1 + str).toFixed(3)})` });
+  }
+  frames[frames.length - 1].transform = `translateX(${to}px) scaleX(1)`;
+  try {
+    el.animate(frames, { duration: Math.round(S.dur * 1000), easing: 'linear', fill: hold ? 'forwards' : 'none' });
+  } catch {
+    /* 무시 */
+  }
+}
