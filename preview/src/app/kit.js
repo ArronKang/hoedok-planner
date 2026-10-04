@@ -6,25 +6,26 @@ import * as M from './motion.js';
 import { platform } from './pwa.js';
 
 /**
- * key가 바뀌면 ref의 화면을 '겹쳐 바뀜'으로 바꾼다 (처음 그릴 때는 가만히).
- * 다시 그리기 직전(그리는 중)에 옛 화면을 복사해 두고, 그린 뒤에 복사본은 흐려지고 새 화면은 나타난다.
- * 화면 옮기기(탭·과목·날짜)에 쓴다 — 설정의 '화면을 옮길 때도 부드럽게'를 따른다.
+ * key가 바뀌면 ref의 화면을 '다음으로'(가로 페이드, 움직임 규칙 ②)로 바꾼다 (처음 그릴 때는 가만히).
+ * 다시 그리기 직전(그리는 중)에 옛 화면을 복사해 두고, 그린 뒤에 옛 것은 먼저 흐려지고 새 것이 들어온다.
+ * dir: 1 앞으로(오른쪽에서) · -1 뒤로 · 0 제자리. 함수면 (옛 key, 새 key) → 방향
  */
-export function useCross(ref, key, rise = 0) {
+export function useCross(ref, key, dir = 0, z = 4) {
   const last = useRef(key);
   const job = useRef(null);
   if (last.current !== key) {
+    const d = typeof dir === 'function' ? dir(last.current, key) : dir;
     last.current = key;
-    job.current = M.viewOn() ? M.viewCapture(ref.current) || 'plain' : null;
+    job.current = M.on() ? { g: M.viewCapture(ref.current), d } : null;
   }
   useLayoutEffect(() => {
-    const g = job.current;
+    const j = job.current;
     job.current = null;
-    if (g && M.viewOn()) M.crossfade(g === 'plain' ? null : g, ref.current, 200, rise);
+    if (j && M.on() && ref.current) M.axis(j.g, ref.current, j.d, null, z);
   });
 }
-/** 예전 이름 (나타나기만) */
-export const useFade = (ref, key) => useCross(ref, key, 4);
+/** 예전 이름 */
+export const useFade = (ref, key) => useCross(ref, key, 0);
 
 const PATHS = {
   today: 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4',
@@ -309,6 +310,7 @@ export function Sheet({ title, children, footer, tall, wide, onClose, step }) {
   const box = useRef(null);
   const veil = useRef(null);
   const sc = useRef(null);
+  const body = useRef(null);
   const drag = useRef(null);
   const st = useRef({ ready: false, touching: false, done: false });
   const native = UI().dev === 'phone' && touchy();
@@ -376,9 +378,11 @@ export function Sheet({ title, children, footer, tall, wide, onClose, step }) {
       if (d.dy > 2) M.play(box.current, [{ transform: `translateY(${d.dy}px)` }, { transform: 'none' }], 200);
     }
   };
+  // 창 안에서 단계가 바뀌면 '다음으로'(가로 페이드). 움직이는 것은 스크롤 상자(.sheet-b) 자체 — 그 안의 것을 움직이지 않는다
+  useCross(body, step || '', 1, 33);
   const sheet = html`<div class=${'sheet' + (tall ? ' tall' : '') + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label=${title} ref=${box}>
     <div class="sheet-h" onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}><span class="grab" aria-hidden="true"></span><h2 class="ell">${title}</h2><button class="ib" aria-label="닫기" onClick=${close}><${Icon} n="x" /></button></div>
-    <div class="sheet-b">${step ? html`<div class="appear" key=${step}>${children}</div>` : children}</div>
+    <div class="sheet-b" ref=${body}>${children}</div>
     ${footer ? html`<div class="sheet-f">${footer}</div>` : null}
   </div>`;
   if (!native)
@@ -469,7 +473,5 @@ export const isPad = () => UI().dev === 'pad';
  * 아래 탭 막대 모양: 아이폰은 떠 있는 유리 막대(리퀴드 글래스), 나머지는 화면에 붙은 기본 막대.
  * 설정 › 화면 › 탭 막대에서 직접 고를 수 있다.
  */
-export const glassBar = () => {
-  const v = PR().tabStyle || 'auto';
-  return v === 'glass' || (v === 'auto' && platform() === 'ios');
-};
+/** 아래 막대는 이제 모든 기기에서 유리 막대 하나 (베타 2.0) */
+export const glassBar = () => true;

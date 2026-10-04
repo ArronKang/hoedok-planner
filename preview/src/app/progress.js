@@ -216,7 +216,7 @@ export function SubjectPage({ id, back }) {
       </div>
       <div class="body" style="padding-top:18px">
         ${cur
-          ? html`<button class="btn pri block" onClick=${() => openSheet({ type: 'record', sub: sub.id, stage: cur.id })}>${cur.name} — ${cur.marks ? '칸 채우기' : '몇 쪽까지 했는지 적기'}</button>`
+          ? html`<button class="btn pri block" onClick=${() => openSheet({ type: 'record', sub: sub.id, stage: cur.id })}>공부 기록<small class="btn-sub">${cur.name.split(' · ')[0]}</small></button>`
           : null}
         <${Facts} sub=${sub} />
         ${rw
@@ -226,7 +226,7 @@ export function SubjectPage({ id, back }) {
           ? html`<button class="note" onClick=${() => setUI({ open: { ...UI().open, ['more-' + sub.id]: true } })}><span class="nt"><small>가장 적게 본 곳</small><b>${lowT}</b></span><span class="go">${C.isCell(sub, C.refBook(sub)) ? '' : '자세히'}</span></button>`
           : null}
         <div>
-          <div class="sec-title">단계<em>눌러서 ${cellBooks.length === sub.books.length ? '칸 채우기' : cellBooks.length ? '적기' : '몇 쪽까지 했는지 적기'}</em></div>
+          <div class="sec-title">단계<em>눌러서 기록</em></div>
           <${StageList} sub=${sub} />
         </div>
         ${cellBooks.map((b, i) => html`<${CellGrid} key=${b.id} sub=${sub} b=${b} first=${i === 0} />`)}
@@ -337,7 +337,7 @@ export function ProgressMenu() {
         : row('다음 시험 정하기', '시험이나 끝낼 날', () => openSheet({ type: 'cycle', step: 'next' }))}
       ${ex ? row(C.isGoal(ex) ? '이 기간 정리하기' : '이 시험 정리하기', C.isGoal(ex) ? '남은 할 일을 치우고 다음을 정해요' : '결과를 적고 다음 시험을 준비해요', () => openSheet({ type: 'cycle' })) : null}
     </div>
-    <button class="linkrow-btn" onClick=${() => openSheet({ type: 'settings', page: 'progressView' })}>진도 화면에 보일 것 고르기 ›</button>
+    <button class="linkrow-btn" onClick=${() => openSheet({ type: 'settings', page: 'progressView' })}>보기 설정 ›</button>
   <//>`;
 }
 
@@ -616,7 +616,7 @@ export function EditSheet({ id, changed: wasChanged }) {
         commit();
         mark();
       }}>+ 단계 하나 더</button>
-      <button class="btn" onClick=${() => openSheet({ type: 'routine', id })}>공부 순서 다시 고르기</button>
+      <button class="btn" onClick=${() => openSheet({ type: 'routine', id })}>공부 순서</button>
     </div>
     ${sub.books.length
       ? html`<div class="sec-title" style="margin-top:26px">한 칸에 걸리는 시간<em>오늘 화면의 예상 시간과 나누기에 써요</em></div>

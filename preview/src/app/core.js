@@ -180,8 +180,24 @@ export const kindOfName = (n) => (n.includes('모의') ? 'mock' : n.includes('�
 
 // ─────────── 상태 ───────────
 
-/** 기기마다 따로 두는 화면 설정 (동기화하지 않음). 나머지 prefs는 공부 설정이라 기기끼리 공유한다. */
+/** 이 기기에 저장해 두는 화면 설정 (앱을 열자마자 쓰려고). 그중 LOOK_PREFS는 계정으로 기기끼리도 맞춘다. */
 export const DEVICE_PREFS = ['theme', 'mode', 'size', 'font', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth', 'motion', 'motionView', 'accent', 'bold', 'tabStyle', 'tabLabels', 'startTab', 'lastTab', 'weekStart', 'clock', 'ddayStyle', 'pctStyle', 'rowEst', 'doneMode', 'haptic'];
+
+/** 계정으로 기기끼리 맞추는 화면 설정 (베타 2.0). 태블릿 칸 배치·마지막 탭처럼 기기마다 다른 것은 뺀다 */
+export const LOOK_PREFS = ['theme', 'mode', 'size', 'font', 'bold', 'motion', 'group', 'doneMode', 'doneBottom', 'show', 'weekStart', 'clock', 'startTab', 'haptic'];
+/** 테마는 색만 6가지 (모양은 하나). 예전 테마·강조 색은 가까운 새 테마로 읽는다 */
+export const THEMES = ['base', 'warm', 'forest', 'ocean', 'lavender', 'ink'];
+const OLD_THEME = { paper: 'warm', crisp: 'ink', soft: 'base' };
+const ACCENT_THEME = { green: 'forest', teal: 'ocean', blue: 'base', indigo: 'lavender', purple: 'lavender', ink: 'ink', rose: 'warm', orange: 'warm' };
+/** 예전 설정 값 → 지금 값 (기록은 고쳐 쓰지 않고 읽을 때) */
+export function migratePrefs(p) {
+  const o = { ...p };
+  if (o.theme && !THEMES.includes(o.theme)) o.theme = (o.accent && ACCENT_THEME[o.accent]) || OLD_THEME[o.theme] || 'base';
+  if (o.accent && o.accent !== 'theme') o.accent = 'theme';
+  if (o.motion === 'slow' || o.motion === 'fast') o.motion = 'normal';
+  if (o.font && o.font !== 'pretendard') o.font = 'pretendard'; // 디자인 규칙: 글꼴은 하나
+  return o;
+}
 
 export function blank() {
   return {
@@ -189,7 +205,7 @@ export function blank() {
     // demo: 예시 기록을 보는 중 (이 동안은 동기화하지 않는다 — 예시가 계정에 섞이지 않게)
     data: { onboarded: false, demo: false, exam: null, lastExam: null, subjects: [], tasks: [], pastExams: [], semesters: [], repeats: [] },
     prefs: {
-      theme: 'paper', mode: 'light', size: 'md', font: 'pretendard', density: 'normal', hand: 'right',
+      theme: 'base', mode: 'auto', size: 'md', font: 'pretendard', density: 'normal', hand: 'right',
       group: 'subject', doneBottom: false,
       show: { dday: true, summary: true, overdue: true, due: true },
       legend: true, lowest: true, recent: true,
@@ -214,7 +230,7 @@ export function hydrate(data, prefs) {
     ...s,
     v: s.v + 1,
     data: { ...b.data, ...data },
-    prefs: { ...b.prefs, ...s.prefs, ...prefs, show: { ...b.prefs.show, ...((prefs || {}).show || s.prefs.show) } },
+    prefs: migratePrefs({ ...b.prefs, ...s.prefs, ...prefs, show: { ...b.prefs.show, ...((prefs || {}).show || s.prefs.show) } }),
   }));
 }
 

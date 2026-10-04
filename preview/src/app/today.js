@@ -2,19 +2,30 @@
 import { html } from '../lib/html.js';
 import { useState, useRef, useEffect } from '../lib/ui.js';
 import * as C from './core.js';
-import { Icon, Check, Sheet, Swipe, hue, Seg, Stepper, isPad, NumField, DateField, glassBar } from './kit.js';
+import { Icon, Check, Sheet, Swipe, hue, Seg, Stepper, NumField, DateField } from './kit.js';
 import { savePhoto, photoURL } from './photos.js';
 import { installHintOn, hideInstallHint, openInstall } from './pwa.js';
 
 const { D, PR, UI, today, viewDay, setUI, openSheet, closeSheet, commit, withUndo, toast, subById, taskStage, taskPages, taskMinutes, tasksOn, overdue, addDays, diffDays, mdw, mdws, md, minutes, P } = C;
 
+/**
+ * 할 일 줄의 제목 = 무엇을 공부하나 (베타 2.0): 단원 이름이 있는 교재는 단원('평면좌표 ~ 원의 방정식'),
+ * 쪽 교재는 '자습서 p.31–40'. 몇 번째로 보는지(1회독)는 아래 작은 글씨로.
+ */
 function titleOf(t) {
   if (t.kind === 'track') {
     const st = taskStage(t);
-    return st ? st.name : '(삭제된 단계)';
+    if (!st) return '(삭제된 단계)';
+    const b = C.bookOf(subById(t.subjectId), st);
+    if (b && b.labels) return C.trng(t);
+    const r = C.trng(t);
+    // '부교재 지문' + '지문 4, 7' → '부교재 지문 4, 7' (같은 말을 두 번 쓰지 않게)
+    return b ? `${b.name} ${b.name.endsWith(r.split(' ')[0]) ? r.slice(r.indexOf(' ') + 1) : r}` : r;
   }
   return t.title;
 }
+/** '1회독 · 교과서' → '1회독' */
+const roundOf = (st) => (st && st.name ? st.name.split(' · ')[0] : '');
 
 function TaskRow({ t, showSubject }) {
   const sub = subById(t.subjectId);
@@ -26,9 +37,9 @@ function TaskRow({ t, showSubject }) {
   const meta = [];
   if (t.at) meta.push(html`<span key="a" class="num">${C.clock(t.at)}</span>`);
   if (showSubject && sub) meta.push(html`<span key="s">${sub.name}</span>`);
-  if (t.kind === 'track') {
-    const bn = st ? C.bookOf(sub, st)?.name || '' : '';
-    meta.push(html`<span key="p">${st && bn && !st.name.includes(bn) ? bn + ' ' : ''}${C.trng(t)}</span>`);
+  if (t.kind === 'track' && st) {
+    const b = C.bookOf(sub, st);
+    meta.push(html`<span key="p">${b && b.labels ? `${b.name} · ${roundOf(st)}` : roundOf(st)}</span>`);
   }
   if (t.due) meta.push(html`<span key="d">마감 ${md(t.due)}</span>`);
   if (PR().rowEst && t.kind === 'track' && taskMinutes(t)) meta.push(html`<span key="e">약 ${minutes(taskMinutes(t))}</span>`);
@@ -55,7 +66,11 @@ function TaskRow({ t, showSubject }) {
       <div class="amt">${reps
         ? html`<span class="num">${t.status === 'done' ? reps : t.repDone || 0}</span>/${reps}번`
         : t.kind === 'track'
-          ? html`<span class="num">${taskPages(t)}</span>${C.unitShort(C.taskUnit(t))}`
+          ? C.taskUnit(t) === 'ch'
+            ? taskPages(t) > 1
+              ? `단원 ${taskPages(t)}개`
+              : ''
+            : html`<span class="num">${taskPages(t)}</span>${C.unitShort(C.taskUnit(t))}`
           : t.est
             ? minutes(t.est)
             : ''}</div>
@@ -168,7 +183,7 @@ export function TodayScreen({ compact }) {
             : !ex
               ? html`<p>다음 시험이나 끝낼 날을 정하면 날마다 할 양을 나눠 드려요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'cycle', step: 'next' })}>시험 정하기</button>`
               : null}
-      <button class="btn ghost" style="margin-top:6px" onClick=${() => openSheet({ type: 'add' })}>할 일 직접 넣기</button>
+      <button class="btn ghost" style="margin-top:6px" onClick=${() => openSheet({ type: 'add' })}>할 일 넣기</button>
     </div>`;
   } else if (!list.length) {
     body = html`<div class="empty small"><h3>다 끝냈어요</h3><p>끝낸 ${doneN}개는 숨겨 두었어요.</p></div>`;
@@ -197,7 +212,6 @@ export function TodayScreen({ compact }) {
       </div>
       ${day !== td ? html`<button class="btn sm quiet" onClick=${() => setUI({ day: null })}>오늘로</button>` : null}
       ${ex && p.show.dday && dday > 0 ? html`<button class="dday-chip" onClick=${() => C.go('progress')}>${ex.name.replace(/^\d학기 /, '')}<b>${p.ddayStyle === 'days' ? `${dday}일 남음` : `D-${dday}`}</b></button>` : null}
-      ${isPad() ? html`<button class="ib" aria-label="할 일 추가" title="할 일 추가" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" /></button>` : null}
       <button class="ib" aria-label="더 보기" onClick=${() => openSheet({ type: 'todayMenu' })}><${Icon} n="more" /></button>
     </header>
     <div class="scroll"><div class="body">
@@ -207,10 +221,8 @@ export function TodayScreen({ compact }) {
       ${C.doneMode() === 'hide' && doneN
         ? html`<button class="foot-link" onClick=${() => setUI({ open: { ...UI().open, showDone: !UI().open.showDone } })}>${hideDone ? `끝낸 일 ${doneN}개 보기` : '끝낸 일 숨기기'}</button>`
         : null}
-      ${all.length && isPad() ? html`<button class="addline" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" s=${20} />할 일 추가</button>` : null}
       ${D().tasks.some((t) => t.date < td) ? html`<button class="foot-link" onClick=${() => openSheet({ type: 'week' })}>이번 주 돌아보기 ›</button>` : null}
     </div></div>
-    ${!isPad() && !compact && !glassBar() ? html`<button class="fab" aria-label="할 일 추가" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" w=${2.2} /></button>` : null}
   </div>`;
 }
 
@@ -233,7 +245,7 @@ export function TodayMenu() {
       ${row('달력', '다른 날 보기', () => openSheet({ type: 'calendar' }))}
       ${(D().repeats || []).length ? row('반복하는 일', `${D().repeats.length}개 · 매일이나 요일마다 저절로 넣는 일`, () => openSheet({ type: 'repeats' })) : null}
     </div></div>
-    <button class="linkrow-btn" onClick=${() => openSheet({ type: 'settings', page: 'views' })}>오늘 화면에 보일 것 고르기 ›</button>
+    <button class="linkrow-btn" onClick=${() => openSheet({ type: 'settings', page: 'views' })}>보기 설정 ›</button>
   <//>`;
 }
 
@@ -630,7 +642,7 @@ export function EndDaySheet({ past }) {
   return html`<${Sheet}
     title=${past ? '지난 날 못 끝낸 일' : '하루 마감'}
     tall
-    footer=${html`${D().exam ? html`<button class="btn" onClick=${() => openSheet({ type: 'plan' })}>남은 계획 다시 나누기</button>` : null}<button class="btn pri" onClick=${closeSheet}>마치기</button>`}
+    footer=${html`${D().exam ? html`<button class="btn" onClick=${() => openSheet({ type: 'plan' })}>다시 나누기</button>` : null}<button class="btn pri" onClick=${closeSheet}>마치기</button>`}
   >
     ${left.length > 1
       ? html`<button class="btn block" style="margin-bottom:10px" onClick=${() => {

@@ -215,7 +215,7 @@ function Line({ pts, min, max, invert, unit }) {
 function NaesinCompare({ sem }) {
   const recs = sem.records.filter((r) => r.category === 'grade');
   return html`<div class="stack">
-    <button class="linkrow-btn" onClick=${() => openSheet({ type: 'naesinTrend' })}>과목마다 시험 점수 흐름 보기 ›</button>
+    <button class="linkrow-btn" onClick=${() => openSheet({ type: 'naesinTrend' })}>점수 흐름 ›</button>
     <p class="hint" style="margin:0">같은 학기 1차 지필(중간)과 2차 지필(기말)이에요.</p>
     <table class="tbl"><thead><tr><th>과목</th><th class="r">1차</th><th class="r">2차</th><th class="r">변화</th></tr></thead><tbody>
       ${recs.map((r) => {
@@ -300,7 +300,7 @@ export function NaesinPage({ sem: semId, rec: recId, back }) {
           ${c.remainingWeight > 0 ? html`<div>아직 점수가 안 나온 비중<b>${fmt(c.remainingWeight, 0)}%</b></div>` : null}
         </div>
         ${c.weightSum !== 100 ? html`<p class="hint">반영 비율을 더하면 ${c.weightSum}%예요.</p>` : null}
-        <button class="btn sm quiet" style="margin-top:10px" onClick=${() => openSheet({ type: 'gradeSetup', sem: sem.id, rec: r.id })}>평가 항목·반영 비율 고치기</button>
+        <button class="btn sm quiet" style="margin-top:10px" onClick=${() => openSheet({ type: 'gradeSetup', sem: sem.id, rec: r.id })}>평가 항목 고치기</button>
       </div>
 
       <div class="card pad">

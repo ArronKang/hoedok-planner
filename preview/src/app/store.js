@@ -2,7 +2,7 @@
 // - 저장: 자료가 바뀔 때마다(commit·설정 변경) 레코드마다 JSON을 비교해 바뀐 것만 쓴다.
 //   → 화면 코드는 프로토타입 그대로 두고, 동기화는 레코드 단위(나중에 고친 쪽이 이김)로 된다.
 // - 다른 탭·다른 기기에서 온 변경: 바뀐 레코드만 자료에 바꿔 끼운다.
-// - 화면 설정(디자인·글자 등)은 이 기기의 localStorage에만 둔다.
+// - 화면 설정(디자인·글자 등)은 이 기기의 localStorage에 두고, 그중 LOOK_PREFS는 meta 레코드로 계정과도 맞춘다.
 import * as db from '../data/db.js';
 import * as C from './core.js';
 import { ns } from '../env.js';
@@ -35,7 +35,8 @@ const fromRec = (key, r) => {
 
 function metaRec() {
   const d = C.D(), p = C.PR();
-  const m = { id: 'main', onboarded: !!d.onboarded, exam: d.exam || null, lastExam: d.lastExam || null, study: Object.fromEntries(C.STUDY_PREFS.map((k) => [k, p[k]])) };
+  const m = { id: 'main', onboarded: !!d.onboarded, exam: d.exam || null, lastExam: d.lastExam || null, study: Object.fromEntries(C.STUDY_PREFS.map((k) => [k, p[k]])), look: Object.fromEntries(C.LOOK_PREFS.map((k) => [k, p[k]])) };
+  if (d.school) m.school = d.school; // 학년·학기·교과서 (베타 2.0)
   if (d.demo) m.demo = true; // 예시인 동안은 동기화가 멈춘다 (sync.js)
   return m;
 }
@@ -91,9 +92,10 @@ export async function initStore() {
     return;
   }
   const meta = db.get('meta', 'main');
-  const data = { ...readAll(), onboarded: !!(meta && meta.onboarded), demo: !!(meta && meta.demo), exam: (meta && meta.exam) || null, lastExam: (meta && meta.lastExam) || null };
+  const data = { ...readAll(), onboarded: !!(meta && meta.onboarded), demo: !!(meta && meta.demo), exam: (meta && meta.exam) || null, lastExam: (meta && meta.lastExam) || null, school: (meta && meta.school) || null };
   data.demo = C.looksLikeDemo(data);
-  C.hydrate(data, { ...dev, ...((meta && meta.study) || {}) });
+  // 화면 설정: 이 기기에 둔 것 위에 계정으로 맞춘 것(look)
+  C.hydrate(data, { ...dev, ...((meta && meta.study) || {}), ...((meta && meta.look) || {}) });
   snapshot();
   lastV = C.store.get().v;
   lastPrefs = C.PR();
@@ -210,7 +212,8 @@ function onDb(changed) {
         d.demo = !!r.demo;
         d.exam = r.exam || null;
         d.lastExam = r.lastExam || null;
-        if (r.study) C.setPrefs(r.study);
+        d.school = r.school || null;
+        if (r.study || r.look) C.setPrefs(C.migratePrefs({ ...C.PR(), ...(r.study || {}), ...(r.look || {}) }));
         dirty = true;
       }
     }

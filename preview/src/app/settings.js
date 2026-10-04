@@ -4,12 +4,12 @@
 import { html } from '../lib/html.js';
 import { useState, useRef, useLayoutEffect, useStore } from '../lib/ui.js';
 import * as C from './core.js';
-import { Icon, Sheet, Seg, Switch, Stepper, hue, DateField, canBuzz, glassBar } from './kit.js';
+import { Icon, Sheet, Seg, Switch, Stepper, hue, DateField } from './kit.js';
 import { AccountPage, syncSmall } from './account.js';
 import * as M from './motion.js';
 import { ns, PREVIEW } from '../env.js';
-import { FONTS, fontById, loadPreviews, previewFamily } from './fonts.js';
-import { installable, openInstall, platform } from './pwa.js';
+import { installable, openInstall } from './pwa.js';
+import * as K from './curriculum.js';
 import { wipeThisDevice } from './store.js';
 import { needsAttention } from '../sync/sync.js';
 import { syncState } from '../sync/state.js';
@@ -17,30 +17,20 @@ import { syncState } from '../sync/state.js';
 const { D, PR, setPrefs, openSheet, closeSheet, commit, toast, minutes, WD } = C;
 
 /** 이 앱의 버전 (설정 › 정보) */
-export const APP_VERSION = '베타 1.2';
+export const APP_VERSION = '베타 2.0';
 export const APP_DATE = '2026년 10월';
 
+/** 테마 = 색 묶음 (모양은 모두 같다 — docs/디자인-규칙.md). 견본 색은 밝게 기준 */
 const THEMES = [
-  { id: 'paper', name: '종이', desc: '따뜻한 종이와 잉크', sw: ['#f4f1e8', '#fdfcf8', '#1f5c4a', '#b8552b'] },
-  { id: 'crisp', name: '선명', desc: '가는 선, 또렷한 숫자', sw: ['#fafaf9', '#ffffff', '#18181a', '#c0501a'] },
-  { id: 'soft', name: '부드러움', desc: '넉넉한 여백, 둥근 모서리', sw: ['#f1f2f5', '#ffffff', '#3d5afe', '#e85d22'] },
-];
-/** 강조 색: '디자인 색'(디자인마다 정해 둔 색) + 고른 색. 밝기·채도는 디자인과 밝게·어둡게에 맞춰 미리 정해 두었다 (styles/app.css) */
-export const ACCENTS = [
-  ['theme', '디자인 색'],
-  ['green', '초록'],
-  ['teal', '청록'],
-  ['blue', '파랑'],
-  ['indigo', '남색'],
-  ['purple', '보라'],
-  ['rose', '분홍'],
-  ['orange', '주황'],
-  ['ink', '먹색'],
+  { id: 'base', name: '기본', bg: '#f2f2f7', surf: '#ffffff', ac: '#2563eb' },
+  { id: 'warm', name: '종이', bg: '#f4f1e8', surf: '#fdfcf8', ac: '#1f5c4a' },
+  { id: 'forest', name: '숲', bg: '#f0f4f1', surf: '#ffffff', ac: '#15803d' },
+  { id: 'ocean', name: '바다', bg: '#eef3f6', surf: '#ffffff', ac: '#0e7490' },
+  { id: 'lavender', name: '라벤더', bg: '#f3f1f8', surf: '#ffffff', ac: '#6d4fd8' },
+  { id: 'ink', name: '먹', bg: '#f5f5f4', surf: '#ffffff', ac: '#18181b' },
 ];
 const MODE_LABEL = { auto: '기기 따라', light: '밝게', dark: '어둡게' };
 const SIZE_LABEL = { sm: '작게', md: '보통', lg: '크게', xl: '아주 크게' };
-const MOTION_LABEL = Object.fromEntries(M.LEVELS);
-const GROUP_LABEL = { subject: '과목별', due: '마감순', time: '시간순' };
 
 // ─────────── 줄 조각 ───────────
 
@@ -163,178 +153,147 @@ function AccountCard({ nav }) {
   return html`<div class="set-group"><div class="set-list">
     <button class="acct-card" onClick=${() => nav('account')}>
       <span class=${'avatar' + (signed ? ' on' : '')} aria-hidden="true">${signed ? s.user.email.slice(0, 1).toUpperCase() : html`<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d=${SET_ICONS.user} /></svg>`}</span>
-      <span class="l"><b>${signed ? s.user.email : '로그인'}</b><small class=${warn ? 'warn' : ''}>${signed || warn ? syncSmall() : '휴대폰과 태블릿이 같은 공부 기록을 쓰게 해요'}</small></span>
+      <span class="l"><b>${signed ? s.user.email : '로그인'}</b><small class=${warn ? 'warn' : ''}>${signed || warn ? syncSmall() : '기록과 설정을 휴대폰·태블릿끼리 맞춰요'}</small></span>
       <${Icon} n="right" s=${18} />
     </button>
   </div></div>`;
 }
 
+/** 설정 첫 화면 (베타 2.0): 실제로 바꿀 것만 — 계정 · 공부 · 화면 · 기록. 나머지는 좋은 기본값 */
 function Root({ nav }) {
   const p = PR();
-  const theme = THEMES.find((t) => t.id === p.theme) || THEMES[0];
   const demo = C.isDemo();
   const ex = D().exam;
   const order = [1, 2, 3, 4, 5, 6, 0];
   const week = order.reduce((a, w) => a + (p.rest.includes(w) ? 0 : p.avail[w]), 0);
   const le = lastExport();
+  const sch = D().school;
+  const th = THEMES.find((t) => t.id === p.theme) || THEMES[0];
   return html`<div>
     ${demo
       ? html`<div class="set-group"><div class="set-list"><button class="set-row key" onClick=${leaveDemo}>
-          <span class="l"><b>예시 끝내고 내 기록으로 시작</b><small>지금은 예시 기록이에요. 누르면 예시를 지우고 처음 설정으로 가요</small></span><${Icon} n="right" s=${18} />
+          <span class="l"><b>예시 끝내고 시작하기</b><small>예시를 지우고 처음 설정으로 가요</small></span><${Icon} n="right" s=${18} />
         </button></div></div>`
       : null}
     <${AccountCard} nav=${nav} />
 
-    <${Group}>
-      <${Row} icon="display" h=${214} label="화면 및 밝기" value=${`${theme.name} · ${MODE_LABEL[p.mode]}`} onClick=${() => nav('display')} />
-      <${Row} icon="text" h=${236} label="글자" value=${`${fontById(p.font).name} · ${SIZE_LABEL[p.size]}`} onClick=${() => nav('text')} />
-      <${Row} icon="tabs" h=${262} label="탭 막대와 배치" value=${C.isPadDev() ? '태블릿' : glassBar() ? '유리' : '기본'} onClick=${() => nav('layout')} />
-      <${Row} icon="motion" h=${182} label="움직임" value=${MOTION_LABEL[M.level()]} onClick=${() => nav('motion')} />
-    <//>
-
-    <${Group}>
-      <${Row} icon="today" h=${14} label="오늘 화면" value=${GROUP_LABEL[p.group] || '과목별'} onClick=${() => nav('todayView')} />
-      <${Row} icon="progress" h=${150} label="진도 화면" value=${p.pctStyle === 'amount' ? '분량' : '퍼센트'} onClick=${() => nav('progressView')} />
-      <${Row} icon="clock" h=${36} label="달력과 시각" value=${`${p.weekStart === 1 ? '월' : '일'}요일부터 · ${p.clock === '12' ? '오전·오후' : '24시간'}`} onClick=${() => nav('calTime')} />
-    <//>
-
     <${Group} title="공부">
-      <${Row} icon="exam" h=${340} label=${C.isGoal() ? '끝낼 날' : '시험'} value=${ex ? C.md(ex.date) : '안 정함'} small=${ex ? ex.name : null} onClick=${() => (ex ? nav('exam') : openSheet({ type: 'cycle', step: 'next' }))} />
-      <${Row} icon="books" h=${72} label="과목" value=${`${D().subjects.length}개`} onClick=${() => nav('subjects')} />
-      <${Row} icon="time" h=${300} label="공부 가능 시간" value=${`주 ${minutes(week)}`} onClick=${() => nav('time')} />
+      <${Row} icon="books" h=${72} label="학년과 과목" value=${sch ? `고${sch.grade} · ${sch.sem}학기` : `${D().subjects.length}과목`} onClick=${() => nav('school')} />
+      <${Row} icon="exam" h=${340} label=${C.isGoal() ? '끝낼 날' : '시험'} value=${ex ? C.md(ex.date) : '안 정함'} onClick=${() => (ex ? nav('exam') : openSheet({ type: 'cycle', step: 'next' }))} />
+      <${Row} icon="time" h=${300} label="공부 시간" value=${`주 ${minutes(week)}`} onClick=${() => nav('time')} />
+      <${Row} icon="clock" h=${36} label="하루가 바뀌는 시각" value=${DAYSTART[p.dayStart] || '새벽 4시'} onClick=${() => nav('dayStart')} />
+    <//>
+
+    <${Group} title="화면">
+      <${Row} icon="display" h=${214} label="테마" value=${`${th.name} · ${MODE_LABEL[p.mode]}`} onClick=${() => nav('theme')} />
+      <${Row} icon="text" h=${236} label="글자 크기" value=${SIZE_LABEL[p.size]} onClick=${() => nav('text')} />
+      <${Row} icon="motion" h=${182} label="움직임"><${Switch} label="움직임" on=${M.level() !== 'off'} onChange=${(v) => setPrefs({ motion: v ? 'normal' : 'off' })} /><//>
     <//>
 
     <${Group}>
-      ${installable() ? html`<${Row} icon="phone" h=${204} label="홈 화면에 앱으로 추가" small="아이콘을 눌러 앱처럼 열기 · 인터넷 없이도" onClick=${openInstall} />` : null}
-      <${Row} icon="data" h=${226} label="기록 관리" value=${le ? `백업 ${C.md(le)}` : null} small=${le ? null : '파일로 내보내기 · 불러오기 · 지우기'} onClick=${() => nav('data')} />
+      ${installable() ? html`<${Row} icon="phone" h=${204} label="홈 화면에 추가" onClick=${openInstall} />` : null}
+      <${Row} icon="data" h=${226} label="기록 관리" value=${le ? `백업 ${C.md(le)}` : null} onClick=${() => nav('data')} />
       <${Row} icon="info" h=${226} label="정보" value=${APP_VERSION} onClick=${() => nav('about')} />
     <//>
+    <p class="hint" style="text-align:center">로그인하면 설정도 기기끼리 맞춰져요.</p>
   </div>`;
 }
+
+const DAYSTART = { 0: '자정', 2: '새벽 2시', 4: '새벽 4시', 6: '새벽 6시' };
 
 // ─────────── 화면 ───────────
 
-/** 지금 화면 설정이 어떻게 보이는지 작은 견본 (디자인·강조 색·글꼴·글자 크기·굵기가 그대로 반영) */
-function Sample() {
-  return html`<div class="sample" aria-hidden="true">
-    <div class="sample-row hue" style=${hue(14)}>
-      <span class="check"><svg viewBox="0 0 26 26"><circle cx="13" cy="13" r="11" class="ring" /><circle cx="13" cy="13" r="11" class="fill" /><path class="tick" d="M8 13.5l3.2 3.2L18 9.5" /></svg></span>
-      <span class="tx"><b>1회독 · 자습서</b><small>p.31–40 · 10쪽</small></span>
-      <span class="pct num">47%</span>
-    </div>
-    <div class="bar hue" style=${hue(14)}><span class="cell done" style="flex-grow:3;flex-basis:0"><i style="width:100%"></i></span><span class="cell doing" style="flex-grow:3;flex-basis:0"><i style="width:55%"></i></span><span class="cell todo" style="flex-grow:2;flex-basis:0"></span></div>
-    <div class="sample-btns"><span class="btn pri sm">다 했어요</span><span class="chip" aria-pressed="true">과목별</span><span class="chip">마감순</span></div>
-  </div>`;
-}
-
-function DisplayPage() {
+/** 테마: 색 6가지(모양은 하나) + 밝기. 누르는 즉시 바뀐다 */
+function ThemePage() {
   const p = PR();
   return html`<div>
-    <${Sample} />
-    <${Group} title="디자인" foot="셋 다 밝게·어둡게 모두 맞춰 두었어요.">
+    <${Group} title="색">
       <div class="set-row col">
-        <div class="preview-themes">${THEMES.map((t) => html`<button key=${t.id} class="theme-card" aria-pressed=${p.theme === t.id ? 'true' : 'false'} onClick=${() => setPrefs({ theme: t.id })}>
-          <span class="sw">${t.sw.map((c, i) => html`<i key=${i} style=${{ background: c }}></i>`)}</span>
-          <b>${t.name}</b><small>${t.desc}</small>
+        <div class="theme-grid" role="radiogroup" aria-label="테마">${THEMES.map((t) => html`<button key=${t.id} class="theme-pick" role="radio" aria-checked=${p.theme === t.id ? 'true' : 'false'} onClick=${() => setPrefs({ theme: t.id })}>
+          <span class="tp-sw" style=${{ background: t.bg }}><i style=${{ background: t.surf }}></i><b style=${{ background: t.ac }}></b></span>
+          <small>${t.name}</small>
         </button>`)}</div>
       </div>
     <//>
     <${Group} title="밝기">
       <div class="set-row col"><${Seg} label="밝기" value=${p.mode} onChange=${(v) => setPrefs({ mode: v })} options=${[['auto', '기기 따라'], ['light', '밝게'], ['dark', '어둡게']]} /></div>
     <//>
-    <${Group} title="강조 색" foot="단추·고른 칸·지금 탭의 색이에요. 과목 색은 과목마다 따로 정해요.">
-      <div class="set-row col">
-        <div class="accents" role="radiogroup" aria-label="강조 색">${ACCENTS.map(([id, name]) => html`<button key=${id} class="accent-opt" data-a=${id} role="radio" aria-checked=${(p.accent || 'theme') === id ? 'true' : 'false'} onClick=${() => setPrefs({ accent: id })}><i></i><small>${name}</small></button>`)}</div>
-      </div>
-    <//>
-    <p class="hint" style="text-align:center">화면 설정은 이 기기에만 저장돼요. 다른 기기는 따로 정해요.</p>
   </div>`;
 }
 
-function TextPage({ nav }) {
+function TextPage() {
   const p = PR();
   return html`<div>
-    <${Sample} />
-    <${Group}>
-      <${Row} label="글꼴" value=${fontById(p.font).name} onClick=${() => nav('font')} />
-      <${Row} label="굵은 글씨" small="글자를 한 단계 두껍게"><${Switch} label="굵은 글씨" on=${!!p.bold} onChange=${(v) => setPrefs({ bold: v })} /><//>
-    <//>
     <${Group} title="글자 크기">
       <div class="set-row col">
         <div class="size-pick" role="radiogroup" aria-label="글자 크기">${['sm', 'md', 'lg', 'xl'].map((k, i) => html`<button key=${k} role="radio" aria-checked=${p.size === k ? 'true' : 'false'} onClick=${() => setPrefs({ size: k })}><span style=${{ fontSize: `${14 + i * 3}px` }}>가</span><small>${SIZE_LABEL[k]}</small></button>`)}</div>
       </div>
     <//>
-    <${Group} title="간격" foot="촘촘하면 한 화면에 더 많이, 넉넉하면 누르기 편하게.">
-      <div class="set-row col"><${Seg} label="간격" value=${p.density} onChange=${(v) => setPrefs({ density: v })} options=${[['compact', '촘촘'], ['normal', '보통'], ['relaxed', '넉넉']]} /></div>
-    <//>
-  </div>`;
-}
-
-/**
- * 한글 글꼴: 이름과 설명을 각 글꼴로 보여 주고, 누르면 앱 전체가 바로 그 글꼴로 바뀐다.
- * 처음 쓰는 글꼴은 인터넷에서 받아 오는 동안 잠깐 기본 글꼴로 보인다.
- */
-function FontPage() {
-  const p = PR();
-  const cur = fontById(p.font).id;
-  loadPreviews();
-  return html`<div>
-    <p class="sub" style="margin:0 0 12px">누르면 바로 바뀌어요. 숫자 모양은 디자인마다 정해져 있어요.</p>
-    <div class="set-list font-list" role="radiogroup" aria-label="글꼴">
-      ${FONTS.map((f) => html`<button key=${f.id} class="set-row font-opt" role="radio" aria-checked=${cur === f.id ? 'true' : 'false'} onClick=${() => setPrefs({ font: f.id })}>
-        <span class="l" style=${{ fontFamily: previewFamily(f) }}><b>${f.name}</b><small>${f.desc}</small></span>
-        ${cur === f.id ? html`<${Icon} n="check" s=${18} />` : null}
-      </button>`)}
-    </div>
-    <p class="hint" style="text-align:center">처음 고른 글꼴은 인터넷에서 받아 와요. 한 번 받으면 인터넷 없이도 보여요.</p>
-  </div>`;
-}
-
-function LayoutPage() {
-  const p = PR();
-  const pad = C.isPadDev();
-  const ios = platform() === 'ios';
-  return html`<div>
-    ${pad
-      ? html`<${Group} title="태블릿 화면">
-          <${Pick} label="오늘 옆에 보일 것"><${Seg} label="오늘 옆" value=${p.padAside} onChange=${(v) => setPrefs({ padAside: v })} options=${[['progress', '진도'], ['calendar', '달력'], ['none', '없음']]} /><//>
-          <${Pick} label="목록 너비" small="진도·성적 왼쪽 칸"><${Seg} label="목록 너비" value=${p.listWidth} onChange=${(v) => setPrefs({ listWidth: v })} options=${[['narrow', '좁게'], ['normal', '보통'], ['wide', '넓게']]} /><//>
-        <//>`
-      : html`<${Group} title="아래 탭 막대" foot=${(p.tabStyle || 'auto') === 'auto' ? (ios ? '아이폰이라 유리 막대로 보여요.' : '이 기기는 기본 막대로 보여요. 아이폰에서는 유리 막대가 돼요.') : null}>
-          <${Pick} label="모양" small="유리: 화면 위에 떠 있는 반투명 막대, ＋ 단추가 옆에 / 기본: 화면 아래에 붙은 막대">
-            <${Seg} label="탭 막대 모양" value=${p.tabStyle || 'auto'} onChange=${(v) => setPrefs({ tabStyle: v })} options=${[['auto', '자동'], ['glass', '유리'], ['classic', '기본']]} />
-          <//>
-          ${!glassBar() ? html`<${Pick} label="＋ 단추 위치" small="오늘 화면, 쥐는 손 쪽으로"><${Seg} label="단추 위치" value=${p.hand} onChange=${(v) => setPrefs({ hand: v })} options=${[['left', '왼쪽'], ['right', '오른쪽']]} /><//>` : null}
-        <//>`}
     <${Group}>
-      <${Row} label="탭 이름 보이기" small="끄면 아이콘만"><${Switch} label="탭 이름 보이기" on=${p.tabLabels !== false} onChange=${(v) => setPrefs({ tabLabels: v })} /><//>
-    <//>
-    <${Group} title="앱을 열면">
-      <div class="set-row col"><${Seg} label="앱을 열면" value=${p.startTab || 'today'} onChange=${(v) => setPrefs({ startTab: v, lastTab: C.UI().tab })} options=${[['today', '오늘'], ['progress', '진도'], ['grades', '성적'], ['last', '마지막 화면']]} /></div>
+      <${Row} label="굵은 글씨" small="글자를 한 단계 두껍게"><${Switch} label="굵은 글씨" on=${!!p.bold} onChange=${(v) => setPrefs({ bold: v })} /><//>
     <//>
   </div>`;
 }
 
-/** 움직임: 속도 하나 + 화면 옮길 때 하나 + 진동. 고르는 순간 아래 알림이 그 속도로 떠서 바로 느껴 볼 수 있다 */
-function MotionPage() {
+function DayStartPage() {
   const p = PR();
-  const lv = M.level();
-  const pick = (v) => {
-    setPrefs({ motion: v });
-    toast(v === 'off' ? '움직임을 껐어요' : `움직임: ${MOTION_LABEL[v]}`);
+  return html`<div>
+    <${Group} foot="밤늦게 공부해도 그날로 기록돼요. 예: 새벽 4시면 새벽 2시에 체크한 것도 어제 공부.">
+      <div class="set-row col"><${Seg} label="하루가 바뀌는 시각" value=${p.dayStart} onChange=${(v) => setPrefs({ dayStart: v })} options=${[[0, '자정'], [2, '새벽 2시'], [4, '새벽 4시'], [6, '새벽 6시']]} /></div>
+    <//>
+  </div>`;
+}
+
+/** 학년과 과목: 학년·학기, 과목마다 교과서(출판사) — 바꾸면 단원이 바뀐다 */
+function SchoolPage({ nav }) {
+  const d = D();
+  const sch = d.school || { grade: 1, sem: K.guessSem(C.today()), pubs: {} };
+  const set = (patch) => {
+    d.school = { ...sch, ...patch };
+    commit();
+  };
+  const rec = K.recommend(sch.grade, sch.sem).filter((r) => !d.subjects.some((s) => s.name === r.name));
+  const changePub = (s, pub) => {
+    const b = s.books.find((x) => x.labels) || s.books[0];
+    const u = K.units(s.name, sch.sem, pub);
+    const name = (K.publishers(s.name).find((x) => x[0] === pub) || [])[1];
+    C.withUndo(`${s.name} 교과서를 바꿨어요`, () => {
+      if (b && b.labels) {
+        C.setBookLabels(s, b, [...u.labels]);
+        const [a, z] = K.scopeGuess(u.labels.length, d.exam ? d.exam.kind : 'mid');
+        C.setBookRange(s, b, a, z);
+        b.pace = u.pace;
+        if (pub === 'other') delete b.pub;
+        else b.pub = name;
+      }
+      d.school = { ...sch, pubs: { ...(sch.pubs || {}), [s.name]: pub } };
+    });
   };
   return html`<div>
-    <${Group} title="움직이는 속도" foot=${p.motion == null && M.osReduce() ? "기기에서 '동작 줄이기'를 켜 두어서 꺼 두었어요. 여기서 고르면 그대로 따라요." : '창이 열리고 닫힐 때, 체크할 때 부드럽게 바뀌어요.'}>
-      <div class="set-row col"><${Seg} label="움직이는 속도" value=${lv} onChange=${pick} options=${M.LEVELS} /></div>
+    <${Group} title="학년">
+      <div class="set-row col"><${Seg} label="학년" value=${sch.grade} onChange=${(v) => set({ grade: v })} options=${K.GRADES} /></div>
+      <div class="set-row col"><${Seg} label="학기" value=${sch.sem} onChange=${(v) => set({ sem: v })} options=${[[1, '1학기'], [2, '2학기']]} /></div>
     <//>
-    ${lv !== 'off'
-      ? html`<${Group}>
-          <${Row} label="화면을 옮길 때도 부드럽게" small="탭을 옮기거나 과목·날짜를 바꿀 때 겹쳐 바뀌어요"><${Switch} label="화면을 옮길 때도 부드럽게" on=${p.motionView !== false} onChange=${(v) => setPrefs({ motionView: v })} /><//>
-        <//>`
-      : null}
-    ${canBuzz()
-      ? html`<${Group}>
-          <${Row} label="체크할 때 진동" small="할 일을 끝낼 때 짧게"><${Switch} label="체크할 때 진동" on=${p.haptic !== false} onChange=${(v) => setPrefs({ haptic: v })} /><//>
+    <${Group} title="과목과 교과서" foot="교과서를 바꾸면 단원 칸이 바뀌어요. 채운 칸은 같은 이름의 단원으로 옮겨져요. 바꾼 뒤에는 진도 › … › 다시 나누기.">
+      ${d.subjects.map((s) => {
+        const pubs = K.publishers(s.name);
+        const b = s.books.find((x) => x.labels);
+        return html`<div class="set-row hue" key=${s.id} style=${hue(s.h)}>
+          <span class="dot"></span>
+          <span class="l"><b>${s.name}</b><small>${b ? `${b.pub || '교과서'} · 단원 ${b.labels.length}개` : s.books.length ? `교재 ${s.books.length}권` : '교재 없음'}</small></span>
+          ${pubs.length > 1 && b
+            ? html`<select class="input sel" aria-label=${s.name + ' 교과서'} value=${(sch.pubs || {})[s.name] || 'other'} onChange=${(e) => changePub(s, e.target.value)}>${pubs.map(([id, n]) => html`<option key=${id} value=${id}>${n}</option>`)}</select>`
+            : null}
+        </div>`;
+      })}
+      <${Row} label="과목 순서와 색" onClick=${() => nav('subjects')} />
+    <//>
+    ${rec.length
+      ? html`<${Group} title=${`고${sch.grade} ${sch.sem}학기에 있는 과목`} foot="누르면 교과서 단원과 함께 넣어요.">
+          <div class="set-row col"><div class="chips">${rec.map((r) => html`<button key=${r.name} class="chip hue" style=${hue(r.h)} onClick=${() => {
+            const [a, z] = K.scopeGuess(K.units(r.name, sch.sem, 'other').labels.length, d.exam ? d.exam.kind : 'mid');
+            C.withUndo(`${r.name} 과목을 넣었어요`, () => d.subjects.push(K.makeSubject({ ...r, pub: 'other', from: a, to: z }, sch.sem)));
+          }}><span class="dot"></span>${r.name}</button>`)}</div></div>
         <//>`
       : null}
   </div>`;
@@ -344,7 +303,7 @@ function TodayViewPage() {
   const p = PR();
   const toggleShow = (k, on) => setPrefs({ show: { ...p.show, [k]: on } });
   return html`<div>
-    <${Group} title="보는 방법" foot=${p.group === 'due' ? '마감일이 가까운 일부터. 마감이 없는 일은 뒤에 놓여요.' : p.group === 'time' ? '시작 시각을 적은 일부터 시각 순서로.' : '과목마다 묶어서 보여요. 과목 순서는 공부 › 과목에서.'}>
+    <${Group} title="보는 방법" foot=${p.group === 'due' ? '마감일이 가까운 일부터. 마감이 없는 일은 뒤에 놓여요.' : p.group === 'time' ? '시작 시각을 적은 일부터 시각 순서로.' : '과목마다 묶어서 보여요. 과목 순서는 설정 › 학년과 과목에서.'}>
       <div class="set-row col"><${Seg} label="보는 방법" value=${p.group} onChange=${(v) => setPrefs({ group: v })} options=${[['subject', '과목별'], ['due', '마감순'], ['time', '시간순']]} /></div>
     <//>
     <${Group} title="끝낸 일">
@@ -352,11 +311,7 @@ function TodayViewPage() {
     <//>
     <${Group} title="위쪽">
       <${Row} label="시험 D-day"><${Switch} label="시험 D-day" on=${p.show.dday} onChange=${(v) => toggleShow('dday', v)} /><//>
-      ${p.show.dday ? html`<${Pick} label="D-day 모양"><${Seg} label="D-day 모양" value=${p.ddayStyle || 'd'} onChange=${(v) => setPrefs({ ddayStyle: v })} options=${[['d', 'D-11'], ['days', '11일 남음']]} /><//>` : null}
       <${Row} label="오늘 요약 막대" small="몇 개, 몇 쪽 했는지"><${Switch} label="오늘 요약" on=${p.show.summary} onChange=${(v) => toggleShow('summary', v)} /><//>
-    <//>
-    <${Group} title="할 일 줄">
-      <${Row} label="예상 시간" small="진도 할 일 아래에 '약 30분'"><${Switch} label="예상 시간" on=${!!p.rowEst} onChange=${(v) => setPrefs({ rowEst: v })} /><//>
     <//>
     <${Group} title="알림 줄" foot="그 상황일 때만 한 줄로 떠요.">
       <${Row} label="지난 날 못 끝낸 일"><${Switch} label="못 끝낸 일 알림" on=${p.show.overdue} onChange=${(v) => toggleShow('overdue', v)} /><//>
@@ -372,24 +327,7 @@ function ProgressViewPage() {
       <div class="set-row col"><${Seg} label="과목 줄의 숫자" value=${p.pctStyle || 'pct'} onChange=${(v) => setPrefs({ pctStyle: v })} options=${[['pct', '퍼센트 47%'], ['amount', '분량 56/120쪽']]} /></div>
     <//>
     <${Group} title="과목 화면">
-      <${Row} label="진도 막대 아래 단계 이름"><${Switch} label="단계 이름" on=${p.legend} onChange=${(v) => setPrefs({ legend: v })} /><//>
-      <${Row} label="가장 적게 본 곳 알려 주기" small="덜 본 구간·칸을 한 줄로"><${Switch} label="가장 적게 본 곳" on=${p.lowest} onChange=${(v) => setPrefs({ lowest: v })} /><//>
-      <${Row} label="최근 2주 기록" small="기록 더 보기 안에"><${Switch} label="최근 2주" on=${p.recent} onChange=${(v) => setPrefs({ recent: v })} /><//>
-    <//>
-  </div>`;
-}
-
-function CalTimePage() {
-  const p = PR();
-  return html`<div>
-    <${Group} title="달력 첫 요일">
-      <div class="set-row col"><${Seg} label="달력 첫 요일" value=${p.weekStart === 1 ? 1 : 0} onChange=${(v) => setPrefs({ weekStart: v })} options=${[[0, '일요일'], [1, '월요일']]} /></div>
-    <//>
-    <${Group} title="시각 표시" foot="할 일의 시작 시각에 써요.">
-      <div class="set-row col"><${Seg} label="시각 표시" value=${p.clock === '12' ? '12' : '24'} onChange=${(v) => setPrefs({ clock: v })} options=${[['24', '24시간 · 21:00'], ['12', '오전·오후 · 오후 9:00']]} /></div>
-    <//>
-    <${Group} title="하루가 바뀌는 시각" foot="밤늦게 공부해도 그날로 기록되도록. 기기끼리 같이 써요.">
-      <div class="set-row col"><${Seg} label="하루 시작" value=${p.dayStart} onChange=${(v) => setPrefs({ dayStart: v })} options=${[[0, '자정'], [2, '새벽 2시'], [4, '새벽 4시'], [6, '새벽 6시']]} /></div>
+      <${Row} label="가장 적게 본 곳 알려 주기" small="덜 본 단원·구간을 한 줄로"><${Switch} label="가장 적게 본 곳" on=${p.lowest} onChange=${(v) => setPrefs({ lowest: v })} /><//>
     <//>
   </div>`;
 }
@@ -522,8 +460,9 @@ function AboutPage() {
   const tips = [
     ['체크', '동그라미를 누르면 끝. 진도에 연결된 할 일은 진도 막대가 저절로 채워져요.'],
     ['밀기', '할 일을 오른쪽으로 밀면 끝, 왼쪽으로 밀면 내일로.'],
-    ['일부만', "할 일을 누르고 '일부만 했어요' — 쪽은 어디까지, 칸 교재는 한 칸만 골라요. 남은 건 내일로."],
-    ['칸 채우기', '지문·문제·단원으로 세는 교재는 진도 › 과목에서 칸을 눌러 채워요.'],
+    ['일부만', "할 일을 누르고 '일부만 했어요' — 한 데까지만 골라요. 남은 건 내일로."],
+    ['공부 기록', '진도 › 과목에서 한 단원·쪽을 바로 적을 수 있어요.'],
+    ['막대 밀기', '아래 막대를 누른 채 옆으로 밀면 탭을 옮겨요.'],
     ['당겨 오기', '＋를 누르면 그 과목에서 다음에 잡혀 있는 것을 오늘로 당겨 올 수 있어요.'],
     ['다시 나누기', '밀린 게 많으면 오늘 › … › 남은 계획 다시 나누기. 시험 전날까지 다시 고르게 나눠요.'],
     ['되돌리기', "지우거나 옮긴 직후 아래 알림의 '되돌리기'를 누르면 돌아가요."],
@@ -540,29 +479,29 @@ function AboutPage() {
     <//>
     <${Group} title="기록은 어디에" foot="베타 버전이에요. 쓰다가 이상한 곳이 있으면 알려 주세요.">
       <div class="set-row"><span class="l"><b>이 기기</b><small>인터넷이 없어도 저장되고 열려요</small></span></div>
-      <div class="set-row"><span class="l"><b>계정</b><small>로그인하면 휴대폰과 태블릿이 같은 기록을 써요. 화면 설정은 기기마다 따로</small></span></div>
+      <div class="set-row"><span class="l"><b>계정</b><small>로그인하면 휴대폰과 태블릿이 같은 기록과 설정을 써요</small></span></div>
     <//>
   </div>`;
 }
 
 // [제목, 화면, 뒤로 갈 곳(없으면 설정 첫 화면)]
 const PAGES = {
-  display: ['화면 및 밝기', DisplayPage],
-  text: ['글자', TextPage],
-  font: ['글꼴', FontPage, 'text'],
-  layout: ['탭 막대와 배치', LayoutPage],
-  motion: ['움직임', MotionPage],
-  todayView: ['오늘 화면', TodayViewPage],
-  progressView: ['진도 화면', ProgressViewPage],
-  calTime: ['달력과 시각', CalTimePage],
-  time: ['공부 가능 시간', TimePage],
+  school: ['학년과 과목', SchoolPage],
+  subjects: ['과목 순서와 색', SubjectsPage, 'school'],
   exam: ['시험', ExamPage],
-  subjects: ['과목', SubjectsPage],
-  account: ['계정 · 동기화', AccountPage],
+  time: ['공부 시간', TimePage],
+  dayStart: ['하루가 바뀌는 시각', DayStartPage],
+  theme: ['테마', ThemePage],
+  text: ['글자 크기', TextPage],
+  account: ['계정', AccountPage],
   data: ['기록 관리', DataPage],
   about: ['정보', AboutPage],
-  // 예전 이름 (다른 화면에서 바로 열 때)
+  // 오늘·진도의 … 메뉴에서 바로 여는 쪽
+  todayView: ['오늘 화면', TodayViewPage],
+  progressView: ['진도 화면', ProgressViewPage],
   views: ['오늘 화면', TodayViewPage],
+  // 예전 이름
+  display: ['테마', ThemePage],
 };
 
 /**
@@ -579,8 +518,8 @@ export function SettingsSheet({ page }) {
   const go = (next, back = false) => {
     const sb = body.current && body.current.closest('.sheet-b');
     if (sb) mem.current[cur || ''] = sb.scrollTop;
-    // 다시 그리기 전에 지금 쪽을 복사해 둔다
-    job.current = { back, g: sb ? M.pageCapture(body.current, sb) : null, top: back ? mem.current[next || ''] || 0 : 0 };
+    // 다시 그리기 전에 지금 쪽(창 안쪽 칸 통째)을 그 자리에 복사해 둔다
+    job.current = { back, g: sb ? M.viewCapture(sb) : null, top: back ? mem.current[next || ''] || 0 : 0 };
     setCur(next);
   };
   useLayoutEffect(() => {
@@ -590,7 +529,8 @@ export function SettingsSheet({ page }) {
     const sb = body.current && body.current.closest('.sheet-b');
     if (!sb) return;
     sb.scrollTop = j.top; // 새 쪽은 맨 위부터, 뒤로 가면 보던 자리
-    M.pagePush(j.g, body.current, sb, j.back);
+    // 움직임 규칙 ② 다음으로: 옛 쪽이 먼저 흐려지고 새 쪽이 오른쪽(뒤로면 왼쪽)에서 들어온다. 창 안쪽 칸 자체를 움직인다
+    M.axis(j.g, sb, j.back ? -1 : 1, '.set-page', 33);
   }, [cur]);
   return html`<${Sheet} title=${P ? P[0] : '설정'} tall>
     <div class="set-page" ref=${body}>

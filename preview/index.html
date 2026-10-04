@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ko" data-preview="10/4 13:23 · 베타 1.2 · 창 튐·두 겹 글자·막대 용수철과 밀기">
+<html lang="ko" data-preview="10/4 23:52 · 베타 2.0 · 규칙·리퀴드 글래스·로그인·학년별 교과서">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
@@ -42,8 +42,10 @@
         if (ac) st.setProperty('--sp-ac', ac);
         var dev = JSON.parse(localStorage.getItem(P + 'hoedok.device.v1') || 'null') || {};
         var lv = dev.motion || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches ? 'off' : 'normal');
-        st.setProperty('--sp-f', lv === 'slow' ? 1.4 : lv === 'fast' ? 0.6 : 1);
+        st.setProperty('--sp-f', 1); // 움직임 규칙: 속도는 하나 (켜기/끄기만)
         if (lv === 'off') document.documentElement.classList.add('sp-still');
+        // 설치 후 처음 한 번만: 자세한 소개 (할 일이 체크될 때마다 진도 칸이 채워짐). 본 뒤에는 짧은 시작 화면
+        if (!localStorage.getItem(P + 'hoedok.intro')) document.documentElement.classList.add('sp-intro');
       } catch (e) {}
     </script>
   </head>
@@ -56,7 +58,13 @@
         <rect class="sp-c" style="--k: 2" x="126" y="4" width="40" height="36" rx="9" pathLength="100" />
         <rect class="sp-c sp-last" style="--k: 3" x="174" y="4" width="46" height="36" rx="9" pathLength="100" />
       </svg>
+      <div class="sp-card">
+        <div class="sp-row" style="--k: 0"><i class="sp-ck"></i><span>국어 · 1단원 읽기</span></div>
+        <div class="sp-row" style="--k: 1"><i class="sp-ck"></i><span>수학 · 다항식의 연산</span></div>
+        <div class="sp-row" style="--k: 2"><i class="sp-ck"></i><span>영어 · Lesson 2</span></div>
+      </div>
       <div class="sp-name">회독 플래너</div>
+      <p class="sp-tag">체크하면 진도가 채워져요</p>
     </div>
     <div id="app"></div>
     <noscript>이 앱은 자바스크립트가 필요해요.</noscript>
