@@ -17,7 +17,7 @@ import { syncState } from '../sync/state.js';
 const { D, PR, setPrefs, openSheet, closeSheet, commit, toast, minutes, WD } = C;
 
 /** 이 앱의 버전 (설정 › 정보) */
-export const APP_VERSION = '베타 1.1';
+export const APP_VERSION = '베타 1.2';
 export const APP_DATE = '2026년 10월';
 
 const THEMES = [
@@ -565,30 +565,32 @@ const PAGES = {
   views: ['오늘 화면', TodayViewPage],
 };
 
-/** 설정 창: 안쪽으로 들어가면 오른쪽에서 밀려 들어오고, 뒤로 가면 왼쪽에서 (아이폰 설정처럼) */
+/**
+ * 설정 창 (아이폰 설정처럼): 안쪽으로 들어가면 새 쪽이 오른쪽에서 덮으며 들어오고, 뒤로 가면 지금 쪽이 오른쪽으로 걷힌다.
+ * 뒤로 가면 앞 쪽은 보던 스크롤 자리 그대로.
+ */
 export function SettingsSheet({ page }) {
   const [cur, setCur] = useState(page || null);
   const P = cur && PAGES[cur];
   const up = P && P[2];
   const body = useRef(null);
-  const dir = useRef(0);
-  const ghost = useRef(null);
+  const job = useRef(null);
+  const mem = useRef({}); // 쪽마다 마지막 스크롤 자리
   const go = (next, back = false) => {
-    dir.current = back ? -1 : 1;
-    // 창 안쪽(스크롤 칸)을 통째로 복사해 그 자리에 두고, 그 안의 옛 쪽만 밀려 나간다 → 창 밖으로 삐져나오지 않는다
-    const sc = body.current && body.current.closest('.sheet-b');
-    ghost.current = M.viewOn() && sc ? M.capture(sc, true) : null;
-    if (sc) sc.scrollTop = 0; // 새 쪽은 맨 위부터
+    const sb = body.current && body.current.closest('.sheet-b');
+    if (sb) mem.current[cur || ''] = sb.scrollTop;
+    // 다시 그리기 전에 지금 쪽을 복사해 둔다
+    job.current = { back, g: sb ? M.pageCapture(body.current, sb) : null, top: back ? mem.current[next || ''] || 0 : 0 };
     setCur(next);
   };
   useLayoutEffect(() => {
-    const d = dir.current;
-    dir.current = 0;
-    const g = ghost.current;
-    ghost.current = null;
-    if (!d || !M.viewOn()) return;
-    if (g) M.release(g, [['.set-page', [{ opacity: 1, transform: 'translateX(0)' }, { opacity: 0, transform: `translateX(${-d * 28}%)` }]]], 260, 33, M.EASE_OUT);
-    M.play(body.current, [{ opacity: 0, transform: `translateX(${d * 36}%)` }, { opacity: 1, transform: 'translateX(0)' }], 300, M.EASE_SHEET);
+    const j = job.current;
+    job.current = null;
+    if (!j) return;
+    const sb = body.current && body.current.closest('.sheet-b');
+    if (!sb) return;
+    sb.scrollTop = j.top; // 새 쪽은 맨 위부터, 뒤로 가면 보던 자리
+    M.pagePush(j.g, body.current, sb, j.back);
   }, [cur]);
   return html`<${Sheet} title=${P ? P[0] : '설정'} tall>
     <div class="set-page" ref=${body}>

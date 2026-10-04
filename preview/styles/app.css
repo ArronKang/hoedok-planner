@@ -1192,3 +1192,7 @@ button.link { background: none; border: 0; padding: 0; font: inherit; font-weigh
 .empty .btn + .btn { margin-left: 4px; }
 /* 기기 스크롤 창 안에서는 예전 '위에서 14px' 자리 잡기를 끈다 (그대로 두면 창이 14px 아래로 밀려 아래 단추가 잘렸다) */
 .device.fullscreen.phone .sheet-sc .sheet, .device.fullscreen.phone .sheet-sc .sheet.tall { top: auto; }
+
+/* ═══════════ 베타 1.2 ═══════════ */
+/* 유리 막대: 누른 채 옆으로 밀면 방울이 손가락을 따라온다 (main.js useTabSlide) → 막대 위에서는 기기가 화면을 끌거나 확대하지 않게 */
+.tabbar.glass { touch-action: none; }

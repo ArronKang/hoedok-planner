@@ -75,8 +75,8 @@ function Summary({ list, day }) {
   return html`<div>
     <button class="summary" onClick=${() => setUI({ open: { ...UI().open, summary: !open } })} aria-expanded=${open ? 'true' : 'false'}>
       <div class="line">
-        <span><b>${doneN}</b> / ${live.length}개</span>
-        ${units.map((u) => html`<span key=${u.id}><b>${fin[u.id] || 0}</b> / ${C.amountText(u.id, all[u.id], true)}</span>`)}
+        <span>할 일 <b>${doneN}</b> / ${live.length}</span>
+        ${units.map((u) => html`<span key=${u.id}>${u.id === 'ch' ? '단원 ' : ''}<b>${fin[u.id] || 0}</b> / ${u.id === 'ch' ? all[u.id] : C.amountText(u.id, all[u.id], true)}</span>`)}
         <span class="caret">${open ? '접기' : '자세히'}</span>
       </div>
       <div class="sumbar" aria-hidden="true"><i style=${{ width: `${live.length ? (doneN / live.length) * 100 : 0}%` }}></i></div>
@@ -814,8 +814,9 @@ export function PlanSheet({ only }) {
   // 단위가 섞이면 큰 숫자는 첫 단위, 나머지는 작게 덧붙인다
   const big = (f) => {
     if (!tu.length) return html`<b class="num">0</b>`;
-    const [u0, ...us] = tu;
-    return html`<b class="num">${f(total[u0.id])}</b>${C.unitShort(u0.id)}${us.length ? html`<small>+ ${us.map((u) => C.amountText(u.id, f(total[u.id]), true)).join(' · ')}</small>` : null}`;
+    const [u0, ...rest] = tu;
+    const us = rest.filter((u) => f(total[u.id]) > 0); // 하루 평균이 0으로 반올림되는 단위는 빼기 ('단원 0개'는 틀린 말)
+    return html`<b class="num">${f(total[u0.id])}</b>${C.unitShort(u0.id)}${us.length ? html`<small>+ ${us.map((u) => C.amountText(u.id, f(total[u.id]))).join(' · ')}</small>` : null}`;
   };
   return html`<${Sheet}
     title=${only ? `${subById(only).name}만 다시 나누기` : `${E}까지 나눠 주기`}

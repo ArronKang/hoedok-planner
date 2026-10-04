@@ -28,7 +28,8 @@ function Card({ step, title, desc, children, foot }) {
 
 export function Onboarding() {
   const step = UI().ob || 0;
-  const go = (n) => setUI({ ob: n });
+  // 다음 단계로 넘어가면 떠 있던 알림(예: '모든 기록을 지웠어요 · 되돌리기')은 거둔다 — 입력 칸을 가리지 않게
+  const go = (n) => setUI({ ob: n, toast: null });
   const data = D();
   const [picked, setPicked] = useState(() => new Set(data.subjects.length ? data.subjects.map((s) => s.name) : ['공통국어', '공통수학', '공통영어', '한국사', '통합사회', '통합과학']));
   const [custom, setCustom] = useState('');
@@ -180,7 +181,7 @@ export function Onboarding() {
     foot=${html`<button class="btn" onClick=${() => go(3)}>이전</button><span class="sp"></span><button class="btn" onClick=${() => finish(false)}>나누지 않고 시작</button><button class="btn pri" disabled=${!tasks.length} onClick=${() => finish(true)}>나눠서 시작</button>`}
   >
     <div class="plan-sum">
-      <div><small>전체 분량</small><b class="num">${tu.length ? total[tu[0].id] : 0}</b>${tu.length ? C.unitShort(tu[0].id) : '쪽'}${tu.length > 1 ? html`<small>+ ${tu.slice(1).map((u) => C.amountText(u.id, total[u.id], true)).join(' · ')}</small>` : null}</div>
+      <div><small>전체 분량</small><b class="num">${tu.length ? total[tu[0].id] : 0}</b>${tu.length ? C.unitShort(tu[0].id) : '쪽'}${tu.length > 1 ? html`<small>+ ${tu.slice(1).map((u) => C.amountText(u.id, total[u.id])).join(' · ')}</small>` : null}</div>
       <div><small>나눌 날</small><b class="num">${days.length}</b>일</div>
       <div><small>하루 예상</small><b class="num">${days.length ? C.minutes(Math.round(mins / days.length / 5) * 5) : '–'}</b></div>
     </div>

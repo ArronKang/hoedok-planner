@@ -28,13 +28,13 @@ function statusText(s) {
   return '로그인됨';
 }
 
-/** 설정 첫 화면 '계정 · 동기화' 줄의 작은 글씨 */
+/** 설정 첫 화면 계정 카드의 작은 글씨 (큰 글씨가 이미 이메일이라 여기는 상태만) */
 export function syncSmall() {
   const s = syncState.get();
   if (C.isDemo()) return '예시를 보는 동안은 맞추지 않아요';
   if (s.lost) return '로그인이 풀렸어요 · 다시 로그인해 주세요';
   if (!s.user) return PREVIEW ? '미리 보기 기록끼리만 맞춰요 · 실제 앱 기록과 따로' : '로그인하면 휴대폰과 태블릿이 같은 기록을 써요';
-  return `${s.user.email} · ${statusText(s)}`;
+  return `기기끼리 맞춤 · ${statusText(s)}`;
 }
 
 const hasLocalData = () => C.D().onboarded || C.D().tasks.length > 0 || C.D().subjects.length > 0;
