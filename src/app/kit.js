@@ -1,23 +1,30 @@
 // 공통 조각
 import { html } from '../lib/html.js';
-import { useRef, useState, useLayoutEffect } from '../lib/ui.js';
-import { pages, done, status, curStage, P, closeSheet, UI, unitOf } from './core.js';
+import { useRef, useState, useLayoutEffect, useEffect } from '../lib/ui.js';
+import { pages, done, status, curStage, P, closeSheet, UI, PR, stageUnit, amountText, ro, fitRange } from './core.js';
 import * as M from './motion.js';
+import { platform } from './pwa.js';
 
 /**
- * key가 바뀔 때마다 ref의 요소를 부드럽게 나타낸다 (처음 그릴 때는 가만히).
+ * key가 바뀌면 ref의 화면을 '겹쳐 바뀜'으로 바꾼다 (처음 그릴 때는 가만히).
+ * 다시 그리기 직전(그리는 중)에 옛 화면을 복사해 두고, 그린 뒤에 복사본은 흐려지고 새 화면은 나타난다.
  * 화면 옮기기(탭·과목·날짜)에 쓴다 — 설정의 '화면을 옮길 때도 부드럽게'를 따른다.
  */
-export function useFade(ref, key, on = M.viewOn) {
-  const first = useRef(true);
+export function useCross(ref, key, rise = 0) {
+  const last = useRef(key);
+  const job = useRef(null);
+  if (last.current !== key) {
+    last.current = key;
+    job.current = M.viewOn() ? M.viewCapture(ref.current) || 'plain' : null;
+  }
   useLayoutEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
-    if (on()) M.play(ref.current, [{ opacity: 0, translate: '0 6px' }, { opacity: 1, translate: '0 0' }], 220);
-  }, [key]);
+    const g = job.current;
+    job.current = null;
+    if (g && M.viewOn()) M.crossfade(g === 'plain' ? null : g, ref.current, 200, rise);
+  });
 }
+/** 예전 이름 (나타나기만) */
+export const useFade = (ref, key) => useCross(ref, key, 4);
 
 const PATHS = {
   today: 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 3v4M16 3v4M9 15l2 2 4-4',
@@ -31,6 +38,7 @@ const PATHS = {
   right: 'M9 5l7 7-7 7',
   down: 'M6 9l6 6 6-6',
   up: 'M6 15l6-6 6 6',
+  check: 'M5 12.5l4.5 4.5L19 7.5',
   cal: 'M4 7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zM4 10h16M8 3v4M16 3v4',
 };
 
@@ -39,6 +47,16 @@ export function Icon({ n, s = 22, w = 1.8 }) {
 }
 
 export const hue = (h) => ({ '--h': h });
+
+/** 체크할 때 짧은 진동 (되는 기기만 — 안드로이드. 설정에서 끌 수 있다) */
+export function buzz() {
+  try {
+    if (PR().haptic !== false && typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8);
+  } catch {
+    /* 무시 */
+  }
+}
+export const canBuzz = () => typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function' && platform() !== 'ios';
 
 /** 체크 동그라미. 일부만 한 경우 조각으로 채운다 */
 export function Check({ state, frac = 0, onClick, label }) {
@@ -61,32 +79,40 @@ export function Check({ state, frac = 0, onClick, label }) {
     const x = 13 + 11 * Math.cos(a), y = 13 + 11 * Math.sin(a);
     inner = html`<path class="fill" d=${`M13 13L13 2A11 11 0 ${frac > 0.5 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)}Z`} />`;
   }
-  return html`<button class="check" aria-label=${label} aria-pressed=${state === 'done' ? 'true' : 'false'} onClick=${(e) => { e.stopPropagation(); onClick(); }}>
+  return html`<button class="check" aria-label=${label} aria-pressed=${state === 'done' ? 'true' : 'false'} onClick=${(e) => {
+    e.stopPropagation();
+    if (state !== 'done') buzz();
+    onClick();
+  }}>
     <svg viewBox="0 0 26 26" ref=${svg}><circle cx="13" cy="13" r="11" class="ring" />${inner}</svg>
   </button>`;
 }
 
-/** 진도 칸: 단계마다 한 칸, 너비는 쪽수 비례 */
+/**
+ * 진도 막대: 단계마다 한 칸(너비는 분량 비례), 한 만큼 과목 색으로 채운다. 안 한 곳은 같은 색을 옅게.
+ * 막대에는 채움만 — 밑줄·테두리 같은 표시는 넣지 않는다 (지금 단계는 아래 글자로 알려 준다).
+ */
 export function StageBar({ sub, big, onCell, legend }) {
   if (!sub.stages.length) return null;
   const cur = curStage(sub);
   const Tag = onCell ? 'button' : 'span';
+  const amt = (s) => `${done(s)}/${amountText(stageUnit(sub, s), pages(s), true)}`;
   return html`<div>
-    <div class=${'bar' + (big ? ' big' : '')} role="img" aria-label=${`${sub.name} 진도 ${P(sub.stages.reduce((a, s) => a + done(s), 0) / Math.max(1, sub.stages.reduce((a, s) => a + pages(s), 0)))}`}>
+    <div class=${'bar' + (big ? ' big' : '')} role="img" aria-label=${`${sub.name} 진도 ${sub.stages.map((s) => `${s.name} ${amt(s)}`).join(', ')}`}>
       ${sub.stages.map((s) => {
         const st = status(s);
         return html`<${Tag}
           key=${s.id}
-          class=${`cell ${st}${cur && cur.id === s.id ? ' cur' : ''}`}
+          class=${`cell ${st}`}
           style=${{ flexGrow: pages(s) || 1, flexBasis: 0 }}
-          title=${`${s.name} · ${done(s)}/${pages(s)}${unitOf(sub)}`}
+          title=${`${s.name} · ${amt(s)}`}
           onClick=${onCell ? () => onCell(s) : undefined}
-          aria-label=${onCell ? `${s.name}, ${done(s)}/${pages(s)}${unitOf(sub)}. 눌러서 적기` : undefined}
+          aria-label=${onCell ? `${s.name}, ${amt(s)}. 눌러서 적기` : undefined}
         ><i style=${{ width: `${pages(s) ? (done(s) / pages(s)) * 100 : 0}%` }}></i><//>`;
       })}
     </div>
     ${legend
-      ? html`<div class="legend">${sub.stages.map((s) => html`<span key=${s.id} class=${cur && cur.id === s.id ? 'cur' : ''} style=${{ flexGrow: pages(s) || 1, flexBasis: 0 }}>${s.name}</span>`)}</div>`
+      ? html`<div class="legend">${sub.stages.map((s) => html`<span key=${s.id} class=${cur && cur.id === s.id ? 'cur' : ''} style=${{ flexGrow: pages(s) || 1, flexBasis: 0 }} title=${s.name}>${/^\d+회독 · /.test(s.name) ? s.name.split(' · ')[0] : s.name}</span>`)}</div>`
       : null}
   </div>`;
 }
@@ -101,6 +127,163 @@ export function Switch({ on, onChange, label }) {
   return html`<button class="switch" role="switch" aria-checked=${on ? 'true' : 'false'} aria-label=${label} onClick=${() => onChange(!on)}></button>`;
 }
 
+// ─────────── 숫자·날짜 칸 ───────────
+// 전에는 글자를 칠 때마다 범위 안으로 고치거나(20쪽부터인데 '2'를 치면 지워짐),
+// 범위 밖 값을 말없이 무시해서(칸에는 친 숫자, 저장은 옛 값) 숫자가 제대로 안 들어갔다.
+// 이제: 치는 동안은 그대로 두고, 칸을 떠나거나 완료를 누를 때 확인한다.
+//      범위 밖이면 가까운 값으로 맞추고 칸 아래에 한 줄로 알려 준다. 보이는 값 = 저장된 값.
+
+/** 적은 글 → 숫자 (빈칸 null, 숫자가 아니면 NaN) */
+export function parseNum(txt, decimal = false) {
+  const t = String(txt == null ? '' : txt).replace(/[,\s]/g, '');
+  if (t === '') return null;
+  if (!(decimal ? /^-?\d*\.?\d+$|^-?\d+\.$/ : /^-?\d+$/).test(t)) return NaN;
+  return Number(t);
+}
+const nfmt = (n) => (Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100));
+
+/**
+ * 숫자 칸.
+ * value: 지금 값(null = 빈칸) · onCommit(n|null): 칸을 떠날 때 저장 · onLive(n|null): 치는 동안 맞는 값일 때마다(미리 보기용)
+ * min·max: 범위 · decimal: 소수 · empty: 비워 둘 수 있음 · unit: 알림 문구에 붙는 단위 ('쪽')
+ * note: 바깥에서 알려 줄 한 줄 (범위를 함께 옮긴 경우 등)
+ */
+export function NumField({ value, onCommit, onLive, min = -Infinity, max = Infinity, decimal = false, empty = false, label, cls = 'input pg', placeholder, unit = '', note: outer }) {
+  const ref = useRef(null);
+  const dirty = useRef(false); // 칸을 누른 뒤 실제로 글자를 쳤나 (안 쳤으면 떠나도 아무것도 바꾸지 않는다)
+  const [note, setNote] = useState(null);
+  const shown = value == null || (typeof value === 'number' && !isFinite(value)) ? '' : nfmt(value);
+  // 칸을 보고 있지 않을 때만 실제 값으로 맞춘다 → 다시 그려져도 치던 글자를 덮지 않는다
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && document.activeElement !== el && el.value !== shown) el.value = shown;
+  });
+  const commit = () => {
+    const el = ref.current;
+    if (!el) return;
+    if (!dirty.current) {
+      if (el.value !== shown) el.value = shown;
+      return;
+    }
+    dirty.current = false;
+    let n = parseNum(el.value, decimal);
+    if (n === null) {
+      if (empty) {
+        setNote(null);
+        if (value != null) onCommit(null);
+      } else {
+        el.value = shown;
+        setNote(shown ? '비울 수 없어서 그대로 뒀어요' : null);
+      }
+      return;
+    }
+    if (isNaN(n)) {
+      el.value = shown;
+      return setNote('숫자만 적을 수 있어요');
+    }
+    let msg = null;
+    if (n < min) {
+      msg = `${nfmt(min)}${unit}보다 작을 수 없어서 ${ro(nfmt(min) + unit)} 맞췄어요`;
+      n = min;
+    } else if (n > max) {
+      msg = `${nfmt(max)}${unit}까지라서 ${ro(nfmt(max) + unit)} 맞췄어요`;
+      n = max;
+    }
+    setNote(msg);
+    el.value = nfmt(n);
+    if (n !== value) onCommit(n);
+  };
+  const live = (e) => {
+    dirty.current = true;
+    if (!onLive) return;
+    const n = parseNum(e.target.value, decimal);
+    onLive(n == null || isNaN(n) ? null : Math.min(max, Math.max(min, n)), n);
+  };
+  const msg = note || outer;
+  return html`<span class="numf">
+    <input
+      ref=${ref}
+      class=${cls}
+      type="text"
+      inputmode=${decimal ? 'decimal' : 'numeric'}
+      enterkeyhint="done"
+      autocomplete="off"
+      defaultValue=${shown}
+      placeholder=${placeholder}
+      aria-label=${label}
+      aria-invalid=${note ? 'true' : 'false'}
+      onFocus=${(e) => {
+        setNote(null);
+        const el = e.target;
+        dirty.current = false;
+        if (el.value !== shown) el.value = shown; // 옆 칸이 이 칸 값을 함께 옮겼을 수 있다
+        // 누르면 전체 선택 → 바로 새 숫자를 치면 바뀐다
+        setTimeout(() => {
+          if (document.activeElement !== el) return;
+          try {
+            el.setSelectionRange(0, el.value.length);
+          } catch {
+            /* 무시 */
+          }
+        }, 0);
+      }}
+      onInput=${live}
+      onBlur=${commit}
+      onKeyDown=${(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          e.target.blur();
+        }
+      }}
+    />
+    ${msg ? html`<small class="numf-note" role="status">${msg}</small>` : null}
+  </span>`;
+}
+
+
+/** 시작 ~ 끝 두 칸 (교재 범위·단계 범위). onCommit(from, to) */
+export function RangeField({ from, to, onCommit, unit = '쪽', label = '', min = 1, max = 9999 }) {
+  const [note, setNote] = useState(null);
+  const put = (which, n) => {
+    const [f, t] = fitRange(from, to, which, n, min);
+    const moved = which === 'from' ? t !== to : f !== from;
+    setNote(moved ? (which === 'from' ? `끝도 같은 길이만큼 옮겼어요 (${f}–${t})` : `시작도 같은 길이만큼 옮겼어요 (${f}–${t})`) : null);
+    onCommit(f, Math.min(max, t));
+  };
+  return html`<span class="rangef">
+    <span class="rangef-in">
+      <${NumField} value=${from} min=${min} max=${max} unit=${unit} label=${label + ' 시작'} onCommit=${(n) => put('from', n)} />
+      <span class="tilde">~</span>
+      <${NumField} value=${to} min=${min} max=${max} unit=${unit} label=${label + ' 끝'} onCommit=${(n) => put('to', n)} />
+      ${unit ? html`<span class="u">${unit}</span>` : null}
+    </span>
+    ${note ? html`<small class="numf-note ok" role="status">${note}</small>` : null}
+  </span>`;
+}
+
+/** 날짜 칸: 고를 수 없는 날을 고르면 되돌리고 알려 준다 (전에는 말없이 무시해서 칸에만 남았다) */
+export function DateField({ value, onCommit, min, label, cls = 'input', style, why }) {
+  const ref = useRef(null);
+  const [note, setNote] = useState(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el && document.activeElement !== el && el.value !== (value || '')) el.value = value || '';
+  });
+  return html`<span class="datef">
+    <input ref=${ref} class=${cls} type="date" style=${style} min=${min} defaultValue=${value || ''} aria-label=${label} onChange=${(e) => {
+      const v = e.target.value;
+      if (!v) return;
+      if (min && v < min) {
+        e.target.value = value || '';
+        return setNote(why || '그날은 고를 수 없어요');
+      }
+      setNote(null);
+      onCommit(v);
+    }} />
+    ${note ? html`<small class="numf-note" role="status">${note}</small>` : null}
+  </span>`;
+}
+
 export function Stepper({ value, step = 30, min = 0, max = 960, fmtv, onChange, label }) {
   return html`<span class="stepper" role="group" aria-label=${label}>
     <button aria-label="줄이기" onClick=${() => onChange(Math.max(min, value - step))}>−</button>
@@ -109,18 +292,68 @@ export function Stepper({ value, step = 30, min = 0, max = 960, fmtv, onChange, 
   </span>`;
 }
 
-/** 시트 틀 */
-/** 창 틀. step: 한 창 안에서 단계가 바뀌는 경우(시험 정리 등) 바뀔 때마다 내용이 부드럽게 나타난다 */
+/** 손가락으로 쓰는 기기인가 (휴대폰 창을 기기 스크롤로 끌어내리게) */
+export const touchy = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/**
+ * 창 틀. step: 한 창 안에서 단계가 바뀌는 경우(시험 정리 등) 바뀔 때마다 내용이 부드럽게 나타난다.
+ *
+ * 휴대폰(손가락): 창을 **기기 스크롤**로 움직인다 — 창 위쪽 빈 곳(gap) + 창을 세로로 쌓은 스크롤 상자.
+ *   맨 아래까지 내려 둔 것이 '열림', 맨 위(창이 화면 밖)가 '닫힘'. 손가락으로 끌어내리면 기기가 직접 스크롤하므로
+ *   아이폰 기본 창처럼 120Hz로 따라오고, 놓으면 관성·튕김·제자리 돌아가기도 기기 그대로다 (scroll-snap).
+ *   창 안 내용이 맨 위일 때 아래로 끌면 창 전체가 내려간다 (기기의 스크롤 이어 받기).
+ * 태블릿·PC: 가운데 뜨는 창. 휴대폰 크기의 PC 창(마우스)은 위쪽 손잡이 줄을 끌어서 닫는다.
+ */
 export function Sheet({ title, children, footer, tall, wide, onClose, step }) {
   const close = onClose || closeSheet;
   const box = useRef(null);
   const veil = useRef(null);
+  const sc = useRef(null);
   const drag = useRef(null);
-  // 처음 열릴 때 한 번: 배경은 서서히 어두워지고 창은 살짝 올라오며 (창에서 창으로 넘어갈 때는 가만히)
-  useLayoutEffect(() => M.sheetIn(veil.current, box.current), []);
-  // 휴대폰: 위쪽 손잡이 줄을 끌어내리면 닫힌다 (손가락을 따라 움직이기만 하고 효과는 없음)
+  const st = useRef({ ready: false, touching: false, done: false });
+  const native = UI().dev === 'phone' && touchy();
+  // 처음 열릴 때 한 번: 배경은 서서히 어두워지고 창은 아래에서 올라온다 (창에서 창으로 넘어갈 때는 가만히)
+  // 스크롤 상자는 거꾸로 쌓는다(column-reverse) → 처음부터 맨 아래(열린 자리)에 있다.
+  // 전에는 열자마자 scrollTop을 맨 아래로 옮겼는데, 아이폰은 그 위치를 한 박자 늦게 그려서 창이 위쪽에 잠깐 튀어 보였다.
+  useLayoutEffect(() => {
+    const s = sc.current;
+    if (s) {
+      const g = s.querySelector('.sheet-gap');
+      if (g) g.style.height = s.clientHeight + 'px'; // 창 위 빈 곳 = 화면 높이 (퍼센트 높이를 믿지 않는다)
+    }
+    st.current.ready = true;
+    M.sheetIn(veil.current, box.current);
+  }, []);
+  useEffect(() => {
+    const s = sc.current;
+    if (!s) return;
+    const fit = () => {
+      const g = s.querySelector('.sheet-gap');
+      if (g) g.style.height = s.clientHeight + 'px';
+    };
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
+  /** 끌어내린 정도 0(열림)…1(닫힘). 거꾸로 쌓은 상자는 위로 갈수록 scrollTop이 음수 */
+  const pulled = (s) => {
+    const max = Math.max(1, s.scrollHeight - s.clientHeight);
+    return Math.max(0, Math.min(1, Math.abs(s.scrollTop) / max));
+  };
+  const onScroll = () => {
+    const s = sc.current, v = veil.current;
+    if (!s || st.current.done) return;
+    const k = pulled(s);
+    if (v) v.style.opacity = k <= 0.001 ? '' : String(1 - k);
+    // 끝까지 끌어내리면 닫는다 (이미 화면 밖이라 사라지는 움직임은 없이)
+    if (st.current.ready && k >= 0.995) {
+      st.current.done = true;
+      M.skipExit();
+      close();
+    }
+  };
+  // PC(마우스)에서 휴대폰 크기 창: 위쪽 손잡이 줄을 끌어내리면 닫힌다
   const down = (e) => {
-    if (UI().dev !== 'phone' || e.target.closest('button')) return;
+    if (native || UI().dev !== 'phone' || e.target.closest('button')) return;
     drag.current = { y: e.clientY, id: e.pointerId, dy: 0 };
     e.currentTarget.setPointerCapture(e.pointerId);
   };
@@ -134,7 +367,6 @@ export function Sheet({ title, children, footer, tall, wide, onClose, step }) {
     const d = drag.current;
     drag.current = null;
     if (!d) return;
-    // 닫을 때는 끌어내린 자리 그대로 두어야 사라지는 모습이 그 자리에서 이어진다
     if (d.dy > 90) {
       if (!M.on() && box.current) box.current.style.transform = '';
       return close();
@@ -144,12 +376,21 @@ export function Sheet({ title, children, footer, tall, wide, onClose, step }) {
       if (d.dy > 2) M.play(box.current, [{ transform: `translateY(${d.dy}px)` }, { transform: 'none' }], 200);
     }
   };
+  const sheet = html`<div class=${'sheet' + (tall ? ' tall' : '') + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label=${title} ref=${box}>
+    <div class="sheet-h" onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}><span class="grab" aria-hidden="true"></span><h2 class="ell">${title}</h2><button class="ib" aria-label="닫기" onClick=${close}><${Icon} n="x" /></button></div>
+    <div class="sheet-b">${step ? html`<div class="appear" key=${step}>${children}</div>` : children}</div>
+    ${footer ? html`<div class="sheet-f">${footer}</div>` : null}
+  </div>`;
+  if (!native)
+    return html`<div>
+      <div class="veil" ref=${veil} onClick=${close}></div>
+      ${sheet}
+    </div>`;
   return html`<div>
-    <div class="veil" ref=${veil} onClick=${close}></div>
-    <div class=${'sheet' + (tall ? ' tall' : '') + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label=${title} ref=${box}>
-      <div class="sheet-h" onPointerDown=${down} onPointerMove=${move} onPointerUp=${up} onPointerCancel=${up}><span class="grab"></span><h2 class="ell">${title}</h2><button class="ib" aria-label="닫기" onClick=${close}><${Icon} n="x" /></button></div>
-      <div class="sheet-b">${step ? html`<div class="appear" key=${step}>${children}</div>` : children}</div>
-      ${footer ? html`<div class="sheet-f">${footer}</div>` : null}
+    <div class="veil" ref=${veil}></div>
+    <div class=${'sheet-sc' + (tall ? ' tall' : '')} ref=${sc} onScroll=${onScroll}>
+      ${sheet}
+      <div class="sheet-gap" onClick=${close}></div>
     </div>
   </div>`;
 }
@@ -223,3 +464,12 @@ export function Toast({ t }) {
 }
 
 export const isPad = () => UI().dev === 'pad';
+
+/**
+ * 아래 탭 막대 모양: 아이폰은 떠 있는 유리 막대(리퀴드 글래스), 나머지는 화면에 붙은 기본 막대.
+ * 설정 › 화면 › 탭 막대에서 직접 고를 수 있다.
+ */
+export const glassBar = () => {
+  const v = PR().tabStyle || 'auto';
+  return v === 'glass' || (v === 'auto' && platform() === 'ios');
+};

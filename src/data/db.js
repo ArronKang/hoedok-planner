@@ -266,6 +266,23 @@ export function restore(entries) {
 
 // ---------- 동기화용 ----------
 
+/**
+ * 이 기기의 모든 레코드(지운 표시 포함)를 다시 올릴 목록에 넣는다. 로그인할 때 부른다:
+ * 서버를 새로 만들었거나 비었어도 다시 채워진다. 서버는 더 새로운 쪽만 받으므로 몇 번 올려도 안전하다.
+ */
+export function requeueAll() {
+  let n = 0;
+  for (const t of TABLES)
+    for (const rec of mem[t].values()) {
+      const k = `${t}/${rec.id}`;
+      outbox.set(k, rec.updatedAt || 0);
+      pending.set(k, { t, rec, ob: true });
+      n++;
+    }
+  if (n) scheduleWrite();
+  return n;
+}
+
 export function pendingCount() {
   return outbox.size;
 }

@@ -23,11 +23,29 @@ export const minutes = (m) => {
   const h = Math.floor(m / 60), r = Math.round(m % 60);
   return h ? (r ? `${h}시간 ${r}분` : `${h}시간`) : `${r}분`;
 };
+/** 시각 표시: 설정에 따라 '21:00' 또는 '오후 9:00' */
+export const clock = (hm) => {
+  if (!hm) return '';
+  if (store.get().prefs.clock !== '12') return hm;
+  const [h, m] = hm.split(':').map(Number);
+  return `${h < 12 ? '오전' : '오후'} ${h % 12 || 12}:${String(m).padStart(2, '0')}`;
+};
 /** 받침에 따라 은/는, 을/를, 이/가 */
 export const josa = (w, a, b) => {
   const c = w.charCodeAt(w.length - 1);
   return w + (c >= 0xac00 && c <= 0xd7a3 && (c - 0xac00) % 28 ? a : b);
 };
+/** 으로/로: '20쪽' → '20쪽으로', '12' → '12로', '30' → '30으로' (ㄹ 받침은 '로') */
+export function ro(w) {
+  const s = String(w);
+  const c = s.slice(-1);
+  const code = c.charCodeAt(0);
+  if (code >= 0xac00 && code <= 0xd7a3) {
+    const j = (code - 0xac00) % 28;
+    return s + (j === 0 || j === 8 ? '로' : '으로');
+  }
+  return s + ('036'.includes(c) ? '으로' : '로');
+}
 
 // ─────────── 기본 선택지 ───────────
 
@@ -37,7 +55,8 @@ export const HUES = [14, 36, 72, 150, 182, 204, 226, 262, 300, 340];
 export const SUBJECT_PRESETS = [
   { name: '공통국어', h: 300, books: ['자습서', '평가문제집'] },
   { name: '공통수학', h: 226, books: ['개념원리', '쎈', '일품'] },
-  { name: '공통영어', h: 262, books: ['교과서', '변형문제'] },
+  // 영어 교과서는 단원(1-1, 1-2…)으로, 변형문제는 지문 번호로 세는 경우가 많다
+  { name: '공통영어', h: 262, books: ['교과서', '변형문제'], units: { 교과서: 'ch', 변형문제: 'psg' } },
   { name: '한국사', h: 36, books: ['교과서', '문제집'] },
   { name: '통합사회', h: 14, books: ['자습서', '평가문제집', '심화문제집'] },
   { name: '통합과학', h: 150, books: ['교과서', '문제집', '기출문제집'] },
@@ -46,8 +65,78 @@ export const SUBJECT_PRESETS = [
 ];
 // 시험 범위 쪽수 기본값 (중간고사 범위 정도). 처음 설정에서 바로 고칠 수 있다.
 export const BOOK_PAGES = { 자습서: [1, 60], 교과서: [1, 70], 평가문제집: [1, 40], 개념원리: [1, 50], 쎈: [1, 50], 일품: [1, 36], 기출문제집: [1, 30], 변형문제: [1, 30], 문제집: [1, 40], 심화문제집: [1, 36], '학교 프린트': [1, 20] };
-export const BOOK_SUGGEST = ['자습서', '교과서', '평가문제집', '개념원리', '쎈', '문제집', '기출문제집', '심화문제집', '학교 프린트'];
-export const bookKind = (name) => (/교과서|자습서|개념|프린트|요약|노트/.test(name) ? '개념' : '문제');
+export const BOOK_SUGGEST = ['자습서', '교과서', '평가문제집', '개념원리', '쎈', '문제집', '기출문제집', '심화문제집', '학교 프린트', '인강', '부교재 지문', '모의고사 기출'];
+/** 과목에 맞는 교재 제안 (국어에 '쎈'을 권하지 않게) */
+export function suggestBooks(subName) {
+  const pre = SUBJECT_PRESETS.find((p) => p.name === subName);
+  const by = /수학/.test(subName)
+    ? ['교과서', '개념원리', '쎈', '일품', '기출문제집', '인강']
+    : /영어/.test(subName)
+      ? ['교과서', '부교재 지문', '변형문제', '모의고사 기출', '단어장', '인강']
+      : /국어|문학|독서|언어/.test(subName)
+        ? ['교과서', '자습서', '평가문제집', '문제집', '기출문제집', '학교 프린트', '인강']
+        : ['교과서', '자습서', '평가문제집', '문제집', '기출문제집', '학교 프린트', '인강'];
+  return [...new Set([...(pre ? pre.books : []), ...by])];
+}
+export const bookKind = (name) => (/교과서|자습서|개념|프린트|요약|노트|인강|강의/.test(name) ? '개념' : '문제');
+/** 이름으로 짐작하는 단위 (바로 바꿀 수 있다) */
+export const BOOK_UNIT = { 인강: ['lec', 1, 20], '부교재 지문': ['psg', 1, 16], '모의고사 기출': ['set', 1, 5] };
+export const guessUnit = (name) => (BOOK_UNIT[name] ? BOOK_UNIT[name][0] : /인강|강의/.test(name) ? 'lec' : /지문|부교재/.test(name) ? 'psg' : /모의고사|기출 ?회/.test(name) ? 'set' : null);
+
+/** 단원 이름 만들기: 큰 단원 시작 번호·개수 × 작은 단원 개수 → '1-1', '1-2' … (small이 0이면 '1', '2' …) */
+export function genLabels(start, big, small) {
+  const out = [];
+  for (let i = 0; i < big; i++) {
+    if (!small) out.push(String(start + i));
+    else for (let j = 1; j <= small; j++) out.push(`${start + i}-${j}`);
+  }
+  return out;
+}
+/** 단원 이름이 genLabels로 만든 모양이면 그 값 ({ start, big, small }), 아니면 null */
+export function labelsShape(labels) {
+  if (!labels || !labels.length) return null;
+  const ms = labels.map((l) => l.match(/^(\d+)(?:-(\d+))?$/));
+  if (!ms.every(Boolean)) return null;
+  const start = +ms[0][1];
+  const small = ms[0][2] ? Math.max(...ms.map((m) => +m[2] || 0)) : 0;
+  const big = new Set(ms.map((m) => m[1])).size;
+  const again = genLabels(start, big, small);
+  return again.length === labels.length && again.every((l, i) => l === labels[i]) ? { start, big, small } : null;
+}
+/** 단원 이름 목록 → 고치기 쉬운 글: 끝 숫자만 이어지는 것은 '1-1~1-4'로 줄인다 (parseLabels로 되돌리면 같다) */
+export function labelsText(labels) {
+  const out = [];
+  for (let i = 0; i < labels.length; i++) {
+    const m = labels[i].match(/^(.*?)(\d+)$/);
+    let j = i;
+    if (m)
+      while (j + 1 < labels.length) {
+        const n = labels[j + 1].match(/^(.*?)(\d+)$/);
+        if (!n || n[1] !== m[1] || +n[2] !== +m[2] + (j + 1 - i) || String(+n[2]) !== n[2]) break;
+        j++;
+      }
+    out.push(j - i >= 2 ? `${labels[i]}~${labels[j]}` : labels.slice(i, j + 1).join(', '));
+    i = j;
+  }
+  return out.join(', ');
+}
+/**
+ * 적은 글 → 단원 이름 목록. 쉼표·줄바꿈으로 나누고, '1-1~1-4' · 'L1~L3' 처럼 끝 숫자만 다른 범위는 펼친다.
+ * 예: '1-1~1-3, 2-1~2-2, 쉬어가기' → 1-1, 1-2, 1-3, 2-1, 2-2, 쉬어가기
+ */
+export function parseLabels(text) {
+  const out = [];
+  for (const raw of String(text || '').split(/[,\n，、]+/)) {
+    const part = raw.trim();
+    if (!part) continue;
+    const m = part.match(/^(.*?)(\d+)\s*[~∼〜]\s*(.*?)(\d+)$/);
+    if (m && (m[3] === '' || m[3] === m[1]) && +m[4] >= +m[2] && +m[4] - +m[2] < 200) {
+      for (let k = +m[2]; k <= +m[4]; k++) out.push(`${m[1]}${k}`);
+    } else out.push(part.slice(0, 24));
+    if (out.length >= 300) break;
+  }
+  return out.slice(0, 300);
+}
 
 export const ROUTINES = [
   { id: 'mine', name: '개념 → 문제 → 개념 → 심화', desc: '개념책 한 번, 문제집 한 번, 다시 개념, 마지막에 어려운 문제집' },
@@ -55,10 +144,18 @@ export const ROUTINES = [
   { id: 'twice', name: '모든 교재 두 바퀴', desc: '넣은 교재를 순서대로 두 번씩' },
 ];
 
-/** psg=true: 지문별로 세는 과목. 단계마다 채운 지문 번호를 따로 기억한다 */
+/**
+ * 공부 순서대로 단계를 만든다. 칸 교재(지문·문제·강·회·단원)의 단계는 채운 칸 번호를 따로 기억한다(marks).
+ * psg: 예전 기록용 — 교재에 단위가 없을 때 과목이 '지문으로 세기'였는지
+ */
 export function buildStages(books, routine = 'mine', psg = false) {
-  return buildStages0(books, routine).map((s) => (psg ? { ...s, marks: [] } : s));
+  return buildStages0(books, routine).map((s) => {
+    const b = books.find((x) => x.id === s.bookId);
+    return unitDef((b && b.unit) || (psg ? 'psg' : 'page')).cell ? { ...s, marks: [] } : s;
+  });
 }
+/** 과목의 교재로 단계 만들기 */
+export const stagesFor = (sub, routine) => buildStages(sub.books, routine || sub.routine || 'mine', sub.unit === 'passage');
 function buildStages0(books, routine) {
   const c = books.filter((b) => b.kind === '개념');
   const p = books.filter((b) => b.kind === '문제');
@@ -84,14 +181,15 @@ export const kindOfName = (n) => (n.includes('모의') ? 'mock' : n.includes('�
 // ─────────── 상태 ───────────
 
 /** 기기마다 따로 두는 화면 설정 (동기화하지 않음). 나머지 prefs는 공부 설정이라 기기끼리 공유한다. */
-export const DEVICE_PREFS = ['theme', 'mode', 'size', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth', 'motion', 'motionView'];
+export const DEVICE_PREFS = ['theme', 'mode', 'size', 'font', 'density', 'hand', 'group', 'doneBottom', 'show', 'legend', 'lowest', 'recent', 'padAside', 'listWidth', 'motion', 'motionView', 'accent', 'bold', 'tabStyle', 'tabLabels', 'startTab', 'lastTab', 'weekStart', 'clock', 'ddayStyle', 'pctStyle', 'rowEst', 'doneMode', 'haptic'];
 
 export function blank() {
   return {
     v: 0,
-    data: { onboarded: false, exam: null, lastExam: null, subjects: [], tasks: [], pastExams: [], semesters: [], repeats: [] },
+    // demo: 예시 기록을 보는 중 (이 동안은 동기화하지 않는다 — 예시가 계정에 섞이지 않게)
+    data: { onboarded: false, demo: false, exam: null, lastExam: null, subjects: [], tasks: [], pastExams: [], semesters: [], repeats: [] },
     prefs: {
-      theme: 'paper', mode: 'light', size: 'md', density: 'normal', hand: 'right',
+      theme: 'paper', mode: 'light', size: 'md', font: 'pretendard', density: 'normal', hand: 'right',
       group: 'subject', doneBottom: false,
       show: { dday: true, summary: true, overdue: true, due: true },
       legend: true, lowest: true, recent: true,
@@ -99,6 +197,9 @@ export function blank() {
       padAside: 'progress', listWidth: 'normal',
       // 움직임: null = 아직 고른 적 없음 → 기기의 '동작 줄이기'를 따른다 (motion.js)
       motion: null, motionView: true,
+      // 화면 (베타 1.0): 강조 색 · 굵은 글씨 · 탭 막대 · 앱을 열면 볼 화면 · 달력 첫 요일 · 시각 표시 · D-day 모양 ·
+      // 진도 숫자(%/분량) · 할 일 줄의 예상 시간 · 끝낸 일(그대로/아래로/숨기기) · 진동
+      accent: 'theme', bold: false, tabStyle: 'auto', tabLabels: true, startTab: 'today', lastTab: 'today', weekStart: 0, clock: '24', ddayStyle: 'd', pctStyle: 'pct', rowEst: false, doneMode: null, haptic: true,
     },
     ui: { tab: 'today', day: null, stacks: { today: [], progress: [], grades: [] }, sheet: null, ob: 0, open: {}, toast: null, dev: 'pad' },
   };
@@ -118,6 +219,9 @@ export function hydrate(data, prefs) {
 }
 
 export const D = () => store.get().data;
+export const isDemo = () => !!store.get().data.demo;
+/** 예시 표시(demo)가 생기기 전에 연 예시도 알아본다: 예시에만 있는 고정 id (진짜 기록의 id는 무작위 8글자) */
+export const looksLikeDemo = (d) => !!(d.demo || (d.exam && d.exam.id === 'ex-now') || (d.pastExams || []).some((e) => e.id === 'ex-final1'));
 export const PR = () => store.get().prefs;
 export const UI = () => store.get().ui;
 export const commit = () => store.set((s) => ({ ...s, v: s.v + 1 }));
@@ -149,6 +253,7 @@ export function withUndo(msg, fn) {
 
 export function go(tab) {
   setUI({ tab, sheet: null });
+  if (PR().startTab === 'last' && PR().lastTab !== tab) setPrefs({ lastTab: tab }); // '마지막으로 본 화면'으로 열기
 }
 /** reset=true: 목록에서 고를 때(처음부터), false: 자세히 화면 안에서 한 단계 더 들어갈 때 */
 export function push(tab, entry, reset = false) {
@@ -170,29 +275,114 @@ export const closeSheet = () => setUI({ sheet: null });
 
 // ─────────── 계산 ───────────
 
-// 쪽으로 세는 과목(기본)과 지문으로 세는 과목. 계산은 같고 '한 칸'의 이름만 다르다.
-export const isPsg = (sub) => !!sub && sub.unit === 'passage';
-export const unitOf = (sub) => (isPsg(sub) ? '지문' : '쪽');
+// ─ 단위 (교재마다) ─
+// 교재마다 세는 단위가 다르다. 쪽은 읽는 순서대로 '어디까지'(stage.upto),
+// 지문·문제·강·회·단원은 칸을 골라 채운다(stage.marks — 건너뛰며 보므로).
+// 단원은 '1-1, 1-2'처럼 이름을 붙일 수 있다(book.labels). 번호 u는 언제나 from…to의 정수이고 이름은 labels[u-1].
+// 예전 기록: 교재에 단위가 없으면 과목의 '지문으로 세기'(sub.unit === 'passage')를 따른다 → 고쳐 쓰지 않고 읽을 때 해석.
+export const UNITS = [
+  { id: 'page', name: '쪽', cell: false, desc: '쪽수로 · 읽은 데까지' },
+  { id: 'psg', name: '지문', cell: true, pace: 10, desc: '지문 번호마다 칸' },
+  { id: 'q', name: '문제', cell: true, pace: 3, desc: '문제 번호마다 칸' },
+  { id: 'lec', name: '강', cell: true, pace: 40, desc: '인강·수업 회차' },
+  { id: 'set', name: '회', cell: true, pace: 60, desc: '모의고사·기출 회차' },
+  { id: 'ch', name: '단원', cell: true, pace: 30, desc: '1-1, 1-2처럼 이름으로' },
+];
+export const unitDef = (id) => UNITS.find((u) => u.id === id) || UNITS[0];
+const legacyUnit = (sub) => (sub && sub.unit === 'passage' ? 'psg' : 'page');
+/** 교재의 단위 id */
+export const bookUnit = (sub, b) => (b && b.unit) || legacyUnit(sub);
+/** 칸을 골라 채우는 교재인가 (쪽이 아님) */
+export const isCell = (sub, b) => unitDef(bookUnit(sub, b)).cell;
+/** 단계의 단위 id (교재가 지워진 단계는 칸 기록이 있으면 지문처럼) */
+export function stageUnit(sub, s) {
+  const b = sub && s ? sub.books.find((x) => x.id === s.bookId) : null;
+  return b ? bookUnit(sub, b) : s && s.marks ? 'psg' : 'page';
+}
+/** 과목에 쓰는 단위들 (교재 순서대로, 겹치지 않게) */
+export const unitsUsed = (sub) => [...new Set(sub.stages.map((s) => stageUnit(sub, s)))];
+/** 과목 하나의 단위 — 섞였으면 null */
+export const soleUnit = (sub) => {
+  const u = unitsUsed(sub);
+  return u.length === 1 ? u[0] : u.length ? null : bookUnit(sub, sub.books[0]);
+};
+/** 숫자 뒤에 붙이는 짧은 단위 ('12쪽', '3개') */
+export const unitShort = (k) => (k === 'ch' ? '개' : unitDef(k).name);
+/** 단위 이름 하나 ('쪽'·'지문'…) — 섞인 과목은 '칸' */
+export const unitWord = (k) => (k ? unitDef(k).name : '칸');
+
 /** 번호 목록을 짧게: [3,4,5,8] → '3–5, 8' */
 export function compress(list) {
+  return runsOf(list).map(([a, b]) => (a === b ? `${a}` : `${a}–${b}`)).join(', ');
+}
+/** 이어진 번호끼리 묶기: [3,4,5,8] → [[3,5],[8,8]] */
+export function runsOf(list) {
   const out = [];
   for (let i = 0; i < list.length; i++) {
     let j = i;
     while (j + 1 < list.length && list[j + 1] === list[j] + 1) j++;
-    out.push(i === j ? `${list[i]}` : `${list[i]}–${list[j]}`);
+    out.push([list[i], list[j]]);
     i = j;
   }
-  return out.join(', ');
+  return out;
 }
-/** 할 일에 붙는 범위 표기: p.3–10 / p.12 / 지문 3–5 / 지문 4, 7 */
-export const rng = (sub, a, b, units) =>
-  isPsg(sub) ? `지문 ${units ? compress(units) : a === b ? a : `${a}–${b}`}` : a === b ? `p.${a}` : `p.${a}–${b}`;
-/** 할 일이 다루는 번호들 (지문별은 건너뛴 번호가 있을 수 있다) */
+/** 칸 하나에 쓰는 짧은 이름: 3 / 1-1 */
+export const itemShort = (b, u) => (b && b.labels && b.labels[u - 1]) || String(u);
+/** 칸 하나의 이름: 3쪽 / 지문 3 / 3번 / 3강 / 3회 / 1-1 */
+export function itemName(sub, b, u) {
+  const lb = b && b.labels && b.labels[u - 1];
+  if (lb) return lb;
+  const k = bookUnit(sub, b);
+  return k === 'page' ? `${u}쪽` : k === 'psg' ? `지문 ${u}` : k === 'q' ? `${u}번` : k === 'lec' ? `${u}강` : k === 'set' ? `${u}회` : `${u}단원`;
+}
+const wrapUnit = (k, r) => (k === 'page' ? `p.${r}` : k === 'psg' ? `지문 ${r}` : k === 'q' ? `문제 ${r}` : k === 'lec' ? `${r}강` : k === 'set' ? `${r}회` : `${r}단원`);
+/** 할 일에 붙는 범위: p.3–10 / 지문 4, 7 / 문제 1–20 / 3–5강 / 1-1 ~ 1-3 (units: 건너뛴 번호가 있을 때 번호 목록) */
+export function rangeText(sub, b, a, z, units) {
+  const L = b && b.labels;
+  if (L) {
+    const nm = (u) => L[u - 1] || String(u);
+    const parts = (units ? runsOf(units) : [[a, z]]).map(([x, y]) => (x === y ? nm(x) : `${nm(x)} ~ ${nm(y)}`));
+    return parts.length > 3 ? `${parts.slice(0, 3).join(', ')} 외 ${parts.length - 3}곳` : parts.join(', ');
+  }
+  return wrapUnit(bookUnit(sub, b), units ? compress(units) : a === z ? `${a}` : `${a}–${z}`);
+}
+/** 단계 범위: 3–10쪽 / 지문 1–8 / 1-1 ~ 4-3 */
+export function spanText(sub, b, a, z) {
+  const L = b && b.labels;
+  if (L) return a === z ? L[a - 1] || String(a) : `${L[a - 1] || a} ~ ${L[z - 1] || z}`;
+  const k = bookUnit(sub, b);
+  return k === 'page' ? `${a}–${z}쪽` : wrapUnit(k, `${a}–${z}`);
+}
+/** 분량: 12쪽 / 3지문 / 20문제 / 2강 / 1회 / 단원 3개 (short: 좁은 칸용 '3개') */
+export function amountText(k, n, short = false) {
+  if (k === 'ch') return short ? `${n}개` : `단원 ${n}개`;
+  return `${n}${unitDef(k).name}`;
+}
+/** 할 일이 다루는 번호들 (칸 교재는 건너뛴 번호가 있을 수 있다) */
 export const unitsOf = (t) => t.units || Array.from({ length: t.to - t.from + 1 }, (_, i) => t.from + i);
-export const trng = (t) => rng(subById(t.subjectId), t.from, t.to, t.units);
-/** 단계에 붙는 범위 표기: 3–10쪽 / 지문 1–8 */
-export const span = (sub, a, b) => (isPsg(sub) ? `지문 ${a}–${b}` : `${a}–${b}쪽`);
-export const amount = (sub, n) => (isPsg(sub) ? `${n}지문` : `${n}쪽`);
+/** 진도 할 일의 단위 id */
+export const taskUnit = (t) => (t.kind === 'track' ? stageUnit(subById(t.subjectId), taskStage(t)) : null);
+export function trng(t) {
+  const sub = subById(t.subjectId);
+  const st = taskStage(t);
+  return rangeText(sub, st ? bookOf(sub, st) : null, t.from, t.to, t.units);
+}
+/** 단위마다 합치기: [[단위, 개수]] → { page: 120, psg: 14 } */
+export function tally(items) {
+  const m = {};
+  for (const [k, n] of items) if (n) m[k] = (m[k] || 0) + n;
+  return m;
+}
+/** '120쪽 · 14지문' (UNITS 순서). 비었으면 empty */
+export function tallyText(m, empty = '0쪽', short = false) {
+  const parts = UNITS.filter((u) => m[u.id]).map((u) => amountText(u.id, m[u.id], short));
+  return parts.length ? parts.join(' · ') : empty;
+}
+/** 과목의 전체·한 분량 (단위마다) */
+export const totU = (sub) => tally(sub.stages.map((s) => [stageUnit(sub, s), pages(s)]));
+export const dnU = (sub) => tally(sub.stages.map((s) => [stageUnit(sub, s), done(s)]));
+/** 진도 할 일들의 분량 (단위마다) */
+export const taskTally = (list) => tally(list.filter((t) => t.kind === 'track').map((t) => [taskUnit(t), taskPages(t)]));
 
 export const pages = (s) => Math.max(0, s.to - s.from + 1);
 export const done = (s) =>
@@ -206,7 +396,28 @@ export function markRange(s, a, b, on = true) {
 export const status = (s) => (pages(s) && done(s) >= pages(s) ? 'done' : done(s) > 0 ? 'doing' : 'todo');
 export const tot = (sub) => sub.stages.reduce((a, s) => a + pages(s), 0);
 export const dn = (sub) => sub.stages.reduce((a, s) => a + done(s), 0);
-export const pct = (sub) => (tot(sub) ? dn(sub) / tot(sub) : 0);
+/** 한 칸에 걸리는 시간(분): 교재에 정한 값 → (예전) 과목에 정한 값 → 단위 기본값 (쪽은 설정의 쪽당 시간) */
+export function paceOfBook(sub, b) {
+  if (b && b.pace) return b.pace;
+  const k = bookUnit(sub, b);
+  if (sub && sub.pace && k === legacyUnit(sub)) return sub.pace;
+  return unitDef(k).pace || PR().pace;
+}
+/**
+ * 진도 비율: 단위가 하나면 개수 그대로(120쪽 중 60쪽 = 50%),
+ * 단위가 섞이면 걸리는 시간으로 무게를 준다 (1쪽과 1강을 같은 하나로 세지 않게).
+ */
+function weighed(pairs) {
+  const mixed = new Set(pairs.map(([sub, s]) => stageUnit(sub, s))).size > 1;
+  let a = 0, b = 0;
+  for (const [sub, s] of pairs) {
+    const w = mixed ? paceOfBook(sub, bookOf(sub, s)) : 1;
+    a += done(s) * w;
+    b += pages(s) * w;
+  }
+  return b ? a / b : 0;
+}
+export const pct = (sub) => weighed(sub.stages.map((s) => [sub, s]));
 export const curStage = (sub) => sub.stages.find((s) => status(s) === 'doing') || sub.stages.find((s) => status(s) === 'todo') || null;
 export const bookOf = (sub, s) => sub.books.find((b) => b.id === s.bookId) || null;
 export const subById = (id) => D().subjects.find((s) => s.id === id) || null;
@@ -224,25 +435,55 @@ export const daysLeft = () => {
   const ex = D().exam;
   return ex ? Math.max(0, diffDays(today(), planEnd(ex))) : 0;
 };
+/** 전 과목: 비율(단위가 섞이면 시간 무게) + 단위마다 전체·한 분량 */
 export const overall = () => {
-  const t = D().subjects.reduce((a, s) => a + tot(s), 0);
-  const d = D().subjects.reduce((a, s) => a + dn(s), 0);
-  return { t, d, p: t ? d / t : 0 };
+  const subs = D().subjects;
+  const all = {}, fin = {};
+  for (const s of subs) {
+    for (const [k, n] of Object.entries(totU(s))) all[k] = (all[k] || 0) + n;
+    for (const [k, n] of Object.entries(dnU(s))) fin[k] = (fin[k] || 0) + n;
+  }
+  return { p: weighed(subs.flatMap((sub) => sub.stages.map((s) => [sub, s]))), all, fin };
 };
 
-/** 진도 숫자 4개 (사실 수치만) */
+/** 남은 분량을 시간으로 (분) */
+export const remMinutes = (sub) => sub.stages.reduce((a, s) => a + (pages(s) - done(s)) * paceOfBook(sub, bookOf(sub, s)), 0);
+const doneMinutes = (sub) => sub.stages.reduce((a, s) => a + done(s) * paceOfBook(sub, bookOf(sub, s)), 0);
+
+/**
+ * 진도 숫자 4개 (사실 수치만). 단위가 하나면 그 단위로,
+ * 섞였으면(쪽 + 지문 등) 하루 평균·하루씩 나누면을 예상 시간으로 (단위를 더할 수 없으므로).
+ */
 export function facts(sub) {
   const ex = D().exam;
+  const k = soleUnit(sub);
   const rem = tot(sub) - dn(sub);
   const dl = daysLeft();
   const elapsed = ex ? Math.max(1, diffDays(ex.start, today()) + 1) : 1;
-  return { rem, dl, avg: dn(sub) / elapsed, per: dl ? rem / dl : null, elapsed };
+  if (k) return { unit: k, rem, dl, avg: dn(sub) / elapsed, per: dl ? rem / dl : null, elapsed };
+  const remT = tally(sub.stages.map((s) => [stageUnit(sub, s), pages(s) - done(s)]));
+  const rm = remMinutes(sub);
+  return { unit: null, rem, remT, dl, avgMin: doneMinutes(sub) / elapsed, perMin: dl ? rm / dl : null, elapsed };
 }
 
-export function logAdd(sub, day, n) {
+/** 날마다 한 양 기록: log는 모든 단위 합(그래프용), logk는 단위마다 (합계 글자용) */
+export function logAdd(sub, day, n, k) {
   if (!n) return;
   sub.log = sub.log || {};
   sub.log[day] = Math.max(0, (sub.log[day] || 0) + n);
+  if (!k) return;
+  sub.logk = sub.logk || {};
+  const o = { ...(sub.logk[day] || {}) };
+  o[k] = Math.max(0, (o[k] || 0) + n);
+  if (!o[k]) delete o[k];
+  sub.logk[day] = o;
+}
+/** 그날 한 양 (단위마다). 단위를 적기 전의 기록은 과목의 예전 단위로 */
+export function logTally(sub, day) {
+  const k = sub.logk && sub.logk[day];
+  if (k && Object.keys(k).length) return k;
+  const n = (sub.log || {})[day] || 0;
+  return n ? { [soleUnit(sub) || legacyUnit(sub)]: n } : {};
 }
 
 /** 구간별: 첫 개념책(없으면 첫 교재)의 쪽을 다섯 구간으로 나눠 몇 번 봤는지 */
@@ -265,8 +506,8 @@ export function share(sub, s, i) {
   return ov(lo, hi, a, a + (pages(s) ? done(s) / pages(s) : 0) * (e - a)) / (hi - lo);
 }
 export const counts = (sub) => Array.from({ length: PARTS }, (_, i) => sub.stages.reduce((a, s) => a + (share(sub, s, i) || 0), 0));
+/** 쪽 교재: 가장 적게 본 구간 번호들 (차이가 0.3번 넘을 때만) */
 export function lowest(sub) {
-  if (isPsg(sub)) return lowestPsg(sub).list;
   const c = counts(sub);
   if (!sub.stages.length) return [];
   const mn = Math.min(...c), mx = Math.max(...c);
@@ -274,45 +515,49 @@ export function lowest(sub) {
   return c.map((v, i) => (v - mn < 0.3 ? i : -1)).filter((i) => i >= 0);
 }
 
-/** 지문별: 교재 하나의 지문마다 몇 번 봤나 (그 교재를 쓰는 단계 중 채운 수) */
+/** 칸 교재: 칸마다 몇 번 봤나 (그 교재를 쓰는 단계 중 채운 수) */
 export function psgCounts(sub, book) {
   const st = sub.stages.filter((s) => s.bookId === book.id);
   const out = [];
   for (let u = book.from; u <= book.to; u++) out.push({ u, n: st.filter((s) => isMarked(s, u)).length });
   return out;
 }
-/** 가장 적게 본 지문 (첫 교재 기준, 차이가 한 번 이상일 때만) */
+/** 칸 교재에서 가장 적게 본 칸 (기준 교재, 차이가 한 번 이상일 때만) */
 export function lowestPsg(sub) {
-  const b = sub.books[0];
-  if (!b || !sub.stages.length) return { book: null, list: [] };
+  const b = refBook(sub);
+  if (!b || !sub.stages.length || !isCell(sub, b)) return { book: b, list: [] };
   const c = psgCounts(sub, b);
+  if (!c.length) return { book: b, list: [] };
   const mn = Math.min(...c.map((x) => x.n)), mx = Math.max(...c.map((x) => x.n));
   if (mx - mn < 1) return { book: b, list: [] };
   return { book: b, list: c.filter((x) => x.n === mn).map((x) => x.u) };
 }
-/** '가장 적게 본 곳' 한 줄 문구 */
+/** '가장 적게 본 곳' 한 줄 문구 — 기준 교재(첫 개념책)가 칸 교재면 칸 이름, 쪽 교재면 쪽 구간 */
 export function lowestText(sub) {
-  if (isPsg(sub)) {
-    const { book, list } = lowestPsg(sub);
-    return list.length ? `${book.name} 지문 ${list.slice(0, 6).join(', ')}${list.length > 6 ? ' …' : ''}` : '';
+  const rb = refBook(sub);
+  if (!rb) return '';
+  if (isCell(sub, rb)) {
+    const { list } = lowestPsg(sub);
+    if (!list.length) return '';
+    const names = list.slice(0, 6).map((u) => itemName(sub, rb, u));
+    return `${rb.name} ${names.join(', ')}${list.length > 6 ? ' …' : ''}`;
   }
   const low = lowest(sub);
-  return low.length ? `${refBook(sub).name} ${low.map((i) => partLabels(sub)[i]).join(', ')}쪽` : '';
+  return low.length ? `${rb.name} ${low.map((i) => partLabels(sub)[i]).join(', ')}쪽` : '';
 }
 
 // ─────────── 할 일 ───────────
 
 export const taskStage = (t) => (t.kind === 'track' ? stageById(subById(t.subjectId), t.stageId) : null);
 export const taskPages = (t) => (t.kind === 'track' ? (t.units ? t.units.length : t.to - t.from + 1) : 0);
-/** 여러 과목의 양 합치기: 쪽과 지문은 따로 센다 → { p: 쪽, q: 지문, text: '120쪽 · 14지문' } */
-export function mix(items) {
-  let p = 0, q = 0;
-  for (const [sub, n] of items) isPsg(sub) ? (q += n) : (p += n);
-  return { p, q, text: [p || !q ? `${p}쪽` : null, q ? `${q}지문` : null].filter(Boolean).join(' · ') };
-}
-export const paceOf = (sub) => (sub && sub.pace) || (isPsg(sub) ? 10 : PR().pace);
+/** 진도 할 일 한 칸에 걸리는 시간 (그 교재 기준) */
+const taskPace = (t) => {
+  const sub = subById(t.subjectId);
+  const st = taskStage(t);
+  return paceOfBook(sub, st ? bookOf(sub, st) : null);
+};
 /** 예상 시간(분): 직접 고른 값이 있으면 그것, 없으면 진도 할 일은 분량 × 걸리는 시간 */
-export const taskMinutes = (t) => t.est || (t.kind === 'track' ? taskPages(t) * paceOf(subById(t.subjectId)) : 0);
+export const taskMinutes = (t) => t.est || (t.kind === 'track' ? taskPages(t) * taskPace(t) : 0);
 export const tasksOn = (day) => D().tasks.filter((t) => t.date === day);
 /** 지난 날 못 끝낸 일. 반복하는 일은 밀리지 않고 그날 기록으로만 남는다 (매일 하는 일이 쌓이면 보기 싫어지므로) */
 export const overdue = () => D().tasks.filter((t) => t.status === 'todo' && !t.closed && !t.rep && t.date < today());
@@ -394,16 +639,32 @@ export function planSubject(sub, from = today(), data = D()) {
   const ex = data.exam;
   if (!ex) return 0;
   data.tasks = data.tasks.filter((t) => !(t.kind === 'track' && t.subjectId === sub.id && t.status === 'todo' && t.date >= from && !t.manual && !t.hist));
+  // 칸마다 걸리는 시간이 무게: 1강(40분)과 1쪽(3분)을 같은 하나로 나누지 않게
   const units = [];
-  for (const s of sub.stages) for (let p = s.from; p <= s.to; p++) if (!isMarked(s, p)) units.push([s.id, p]);
+  for (const s of sub.stages) {
+    const w = paceOfBook(sub, bookOf(sub, s));
+    for (let p = s.from; p <= s.to; p++) if (!isMarked(s, p)) units.push([s.id, p, w]);
+  }
   const days = planDays(from, planEnd(ex), data);
   if (!units.length || !days.length) return 0;
   const W = days.reduce((a, x) => a + x.w, 0);
+  // 무게가 모두 같으면 개수로 (지금까지와 똑같이), 다르면 누적 시간이 그날 몫에 가장 가까운 곳까지
+  const even = units.every((u) => u[2] === units[0][2]);
+  const cw = [0];
+  if (!even) for (const u of units) cw.push(cw[cw.length - 1] + u[2]);
+  const Wt = even ? 0 : cw[cw.length - 1];
   let acc = 0, idx = 0, made = 0;
   for (let di = 0; di < days.length; di++) {
     const day = days[di];
     acc += day.w;
-    let end = Math.round((units.length * acc) / W);
+    let end;
+    if (even) end = Math.round((units.length * acc) / W);
+    else if (di === days.length - 1) end = units.length;
+    else {
+      const target = (Wt * acc) / W;
+      end = idx;
+      while (end < units.length && Math.abs(cw[end + 1] - target) <= Math.abs(cw[end] - target)) end++;
+    }
     // 단계가 바뀌는 곳에서 새 단계 몇 쪽만 붙는 자투리는 다음 날로 넘긴다
     if (di < days.length - 1 && end > idx) {
       let b = -1;
@@ -454,7 +715,7 @@ export function toggleTask(id) {
       const b = done(st);
       if (st.marks) st.marks = t.prevMarks ?? st.marks.filter((u) => !unitsOf(t).includes(u));
       else st.upto = t.prevUpto ?? null;
-      logAdd(sub, t.doneDay || today(), done(st) - b);
+      logAdd(sub, t.doneDay || today(), done(st) - b, stageUnit(sub, st));
     }
     if (t.reps > 1) t.repDone = t.reps - 1;
     t.status = 'todo';
@@ -485,7 +746,7 @@ export function toggleTask(id) {
       t.prevUpto = st.upto;
       st.upto = Math.max(st.upto ?? st.from - 1, t.to);
     }
-    logAdd(sub, today(), done(st) - b);
+    logAdd(sub, today(), done(st) - b, stageUnit(sub, st));
     msg = `${sub.name} 진도 ${P(before)} → ${P(pct(sub))}`;
   }
   t.status = 'done';
@@ -494,16 +755,19 @@ export function toggleTask(id) {
   if (msg) toast(msg);
 }
 
-/** 일부만 했을 때: 한 곳까지 반영하고, 남은 쪽은 내일로 넘기거나 버린다 */
-export function partialTask(id, upto, rest) {
+/**
+ * 일부만 했을 때: 한 만큼 반영하고, 남은 것은 내일로 넘기거나 버린다.
+ * 쪽은 '어디까지'(upto), 칸 교재는 한 칸을 골라서(picked: 번호 목록) — 건너뛴 칸도 맞게.
+ */
+export function partialTask(id, upto, rest, picked = null) {
   const data = D();
   const t = data.tasks.find((x) => x.id === id);
   const sub = subById(t.subjectId);
   const st = taskStage(t);
   if (!st) return;
   const all = unitsOf(t);
-  const did = all.filter((u) => u <= upto);
-  const left = all.filter((u) => u > upto);
+  const did = picked && st.marks ? all.filter((u) => picked.includes(u)) : all.filter((u) => u <= upto);
+  const left = all.filter((u) => !did.includes(u));
   const list = (a) => (a.length === a[a.length - 1] - a[0] + 1 ? null : a); // 이어진 번호면 목록은 필요 없다
   if (did.length) {
     const b = done(st);
@@ -512,9 +776,10 @@ export function partialTask(id, upto, rest) {
       for (const u of did) markRange(st, u, u);
     } else {
       t.prevUpto = st.upto;
-      st.upto = Math.max(st.upto ?? st.from - 1, upto);
+      st.upto = Math.max(st.upto ?? st.from - 1, did[did.length - 1]);
     }
-    logAdd(sub, today(), done(st) - b);
+    logAdd(sub, today(), done(st) - b, stageUnit(sub, st));
+    t.from = did[0];
     t.to = did[did.length - 1];
     t.units = list(did);
     t.status = 'done';
@@ -663,7 +928,7 @@ export function editTask(t, k, v) {
 export function recordStage(sub, st, upto) {
   const b = done(st);
   st.upto = upto < st.from ? null : Math.min(upto, st.to);
-  logAdd(sub, today(), done(st) - b);
+  logAdd(sub, today(), done(st) - b, stageUnit(sub, st));
   const u = st.upto ?? st.from - 1;
   for (const t of D().tasks) {
     if (t.kind !== 'track' || t.stageId !== st.id || t.status !== 'todo' || t.hist) continue;
@@ -675,11 +940,11 @@ export function recordStage(sub, st, upto) {
   }
 }
 
-/** 지문별 과목: 칸 하나를 채우거나 비운다. 범위가 다 채워진 할 일은 저절로 체크된다. */
+/** 칸 교재: 칸 하나를 채우거나 비운다. 범위가 다 채워진 할 일은 저절로 체크된다. */
 export function toggleCell(sub, st, u) {
   const on = !isMarked(st, u);
   markRange(st, u, u, on);
-  logAdd(sub, today(), on ? 1 : -1);
+  logAdd(sub, today(), on ? 1 : -1, stageUnit(sub, st));
   for (const t of D().tasks) {
     if (t.kind !== 'track' || t.stageId !== st.id || t.status !== 'todo' || t.hist) continue;
     const us = unitsOf(t);
@@ -691,18 +956,55 @@ export function toggleCell(sub, st, u) {
   }
 }
 
-/** '쎈 p.20-35' 처럼 적으면 그 교재의 단계에 연결한다. 지문별 과목은 '지문 3-5'만 적어도 된다. */
+/**
+ * 적은 글에서 진도 범위를 찾아 그 교재의 단계에 연결한다.
+ * '쎈 p.20-35' · '지문 3-5' · '문제 1~20' · '3-5강' · '1-1~1-3'(단원 이름) 처럼 적으면 된다.
+ * 교재 이름이 없어도 그 단위를 쓰는 교재가 하나뿐이면 그 교재로.
+ */
 export function parseLink(text, sub) {
   if (!sub || !text) return null;
-  const m = text.match(/(?:p\.?\s*|지문\s*)?(\d+)\s*(?:[-~–]|부터)\s*(\d+)\s*(?:쪽|p|번)?/i);
-  let book = sub.books.find((b) => text.includes(b.name));
-  if (!book && isPsg(sub) && /지문/.test(text)) {
-    const cs = curStage(sub);
-    book = (cs && bookOf(sub, cs)) || sub.books[0];
+  let book = [...sub.books].sort((a, b) => b.name.length - a.name.length).find((b) => text.includes(b.name));
+  const byName = !!book;
+  if (!book) {
+    // 단위 말로 찾기: '지문' '문제' '강' '회' / 'p' '쪽'
+    const want = /지문/.test(text) ? 'psg' : /문제|번/.test(text) ? 'q' : /\d\s*강/.test(text) ? 'lec' : /\d\s*회/.test(text) ? 'set' : /p\.?\s*\d|\d\s*쪽/i.test(text) ? 'page' : null;
+    const same = want ? sub.books.filter((b) => bookUnit(sub, b) === want) : [];
+    if (same.length === 1) book = same[0];
+    else if (same.length > 1) {
+      const cs = curStage(sub);
+      book = (cs && same.find((b) => b.id === cs.bookId)) || same[0];
+    }
   }
-  if (!m || !book) return null;
-  const from = +m[1], to = +m[2];
+  // 단원 이름(1-1 등)은 이름 그대로 찾는다 — 숫자 범위로 읽으면 '1-1'이 1쪽이 되므로 먼저
+  const named = (book ? [book] : sub.books).filter((b) => b.labels && b.labels.length);
+  for (const b of named) {
+    const hits = [];
+    const sorted = b.labels.map((l, i) => [l, i + 1]).sort((x, y) => y[0].length - x[0].length);
+    let rest = text;
+    for (const [l, u] of sorted) {
+      const at = rest.indexOf(l);
+      if (at >= 0 && l) {
+        hits.push([at, u]);
+        rest = rest.slice(0, at) + ' '.repeat(l.length) + rest.slice(at + l.length);
+      }
+    }
+    if (!hits.length) continue;
+    hits.sort((x, y) => x[0] - y[0]);
+    const us = hits.map((h) => h[1]);
+    const from = Math.min(us[0], us[us.length - 1]), to = Math.max(us[0], us[us.length - 1]);
+    const r = linkTo(sub, b, from, to);
+    if (r) return r;
+  }
+  if (!book) return null;
+  // 범위(20-35) → 앞에 단위가 붙은 한 칸(p.20, 지문 3) → 뒤에 단위가 붙은 한 칸(3강)은 교재 이름이 있을 때만
+  const m = text.match(/(?:p\.?\s*|지문\s*|문제\s*)?(\d+)\s*(?:[-~–]|부터)\s*(\d+)\s*(?:쪽|p|번|강|회)?/i) || text.match(/(?:p\.?\s*|지문\s*|문제\s*)(\d+)()/i) || (byName ? text.match(/(\d+)\s*(?:쪽|번|강|회)()/) : null);
+  if (!m) return null;
+  const from = +m[1], to = m[2] ? +m[2] : +m[1];
   if (!(to >= from)) return null;
+  return linkTo(sub, book, from, to);
+}
+/** 교재의 범위 → 그 범위를 다루는 (안 끝난) 단계 */
+function linkTo(sub, book, from, to) {
   const st = sub.stages.find((s) => s.bookId === book.id && status(s) !== 'done' && from >= s.from && from <= s.to) || sub.stages.find((s) => s.bookId === book.id && status(s) !== 'done');
   if (!st) return null;
   return { stage: st, from: clamp(from, st.from, st.to), to: clamp(to, st.from, st.to) };
@@ -717,10 +1019,13 @@ export function addTask({ title, subjectId, date, link, est }) {
   return t;
 }
 
+/** 끝낸 일을 어떻게 둘까: 'stay' 그 자리에 / 'bottom' 아래로 / 'hide' 숨기기 (예전 설정 doneBottom도 읽는다) */
+export const doneMode = () => PR().doneMode || (PR().doneBottom ? 'bottom' : 'stay');
+
 /** 오늘 화면 정렬: 마감순 / 시간순 (없으면 뒤로, 같으면 중요도 높은 것 먼저) */
 const byPri = (a, b) => (b.pri || 0) - (a.pri || 0);
 export function sortTasks(list, mode) {
-  const o = { todo: 0, done: PR().doneBottom ? 2 : 0, dropped: 3 };
+  const o = { todo: 0, done: doneMode() === 'stay' ? 0 : 2, dropped: 3 };
   const st = (a, b) => (o[a.status] ?? 0) - (o[b.status] ?? 0);
   if (mode === 'due') return [...list].sort((a, b) => st(a, b) || cmpNull(a.due, b.due) || byPri(a, b));
   if (mode === 'time') return [...list].sort((a, b) => st(a, b) || cmpNull(a.at, b.at) || byPri(a, b));
@@ -869,12 +1174,25 @@ export function nextGuess() {
   return pick(m >= 3 && m <= 5 ? '1학기 중간고사' : m >= 6 && m <= 7 ? '1학기 기말고사' : m >= 8 && m <= 10 ? '2학기 중간고사' : '2학기 기말고사', 30);
 }
 
-/** 다음 범위 기본값: 쪽은 지난 범위 바로 다음부터 같은 길이, 지문은 1번부터 같은 개수 */
+/**
+ * 다음 범위 기본값 (바로 고칠 수 있게 채워 두는 값):
+ * 쪽·문제·강·회는 지난 범위 바로 다음부터 같은 길이, 지문은 1번부터 같은 개수(시험마다 새 지문),
+ * 단원은 '1-1…2-3' 다음 '3-1…4-3'처럼 큰 단원 번호를 넘긴다 (이름이 그런 꼴일 때만).
+ */
 export function shiftScopes() {
   for (const sub of D().subjects)
     for (const b of sub.books) {
+      const k = bookUnit(sub, b);
       const len = b.to - b.from + 1;
-      if (isPsg(sub)) {
+      if (k === 'ch') {
+        const L = b.labels;
+        const ms = L && L.map((l) => l.match(/^(\D*)(\d+)(-\d+)?$/));
+        if (ms && ms.every(Boolean)) {
+          const bigs = ms.map((m) => +m[2]);
+          const step = Math.max(...bigs) - Math.min(...bigs) + 1;
+          b.labels = ms.map((m) => `${m[1]}${+m[2] + step}${m[3] || ''}`);
+        }
+      } else if (k === 'psg') {
         b.from = 1;
         b.to = len;
       } else {
@@ -897,7 +1215,7 @@ export function startNext(next) {
         if (s.marks) n.marks = [];
         return n;
       });
-    if (!sub.stages.length && sub.books.length) sub.stages = buildStages(sub.books, sub.routine || 'mine', isPsg(sub));
+    if (!sub.stages.length && sub.books.length) sub.stages = stagesFor(sub);
   }
 }
 
@@ -923,16 +1241,6 @@ export function openGradeSetup(subId) {
   const r = ensureRecord(sem, sub);
   commit();
   openSheet({ type: 'gradeSetup', sem: sem.id, rec: r.id });
-}
-
-/** 과목 단위를 쪽 ↔ 지문으로 바꾼다. 단계는 같은 공부 순서로 새로 만든다(진도는 처음부터). */
-export function setUnit(sub, unit, n = 12) {
-  if ((sub.unit || 'page') === unit) return;
-  sub.unit = unit;
-  if (unit === 'passage') for (const b of sub.books) (b.from = 1), (b.to = n);
-  sub.pace = null;
-  sub.stages = buildStages(sub.books, sub.routine || 'mine', unit === 'passage');
-  if (D().exam) planSubject(sub, today());
 }
 
 /** 한 주 돌아보기 (사실만) */
@@ -997,9 +1305,117 @@ export function newSubject(name, h) {
   const hue = h ?? (pre && !used.has(pre.h) ? pre.h : HUES.find((x) => !used.has(x)) ?? HUES[D().subjects.length % HUES.length]);
   return { id: uid(), name, h: hue, books: [], stages: [], routine: 'mine', log: {} };
 }
-export function newBook(name) {
-  const r = BOOK_PAGES[name] || [1, 50];
-  return { id: uid(), name, kind: bookKind(name), from: r[0], to: r[1] };
+/** 새 교재. unit을 주지 않으면 이름으로 짐작(인강 → 강 …), 그래도 모르면 쪽 */
+export function newBook(name, unit) {
+  const k = unit || guessUnit(name) || 'page';
+  const r = (BOOK_UNIT[name] && BOOK_UNIT[name][0] === k ? BOOK_UNIT[name].slice(1) : null) || (k === 'page' ? BOOK_PAGES[name] : null) || (k === 'page' ? [1, 50] : k === 'psg' ? [1, 12] : k === 'q' ? [1, 40] : k === 'lec' ? [1, 20] : k === 'set' ? [1, 5] : [1, 6]);
+  const b = { id: uid(), name, kind: bookKind(name), unit: k, from: r[0], to: r[1] };
+  if (k === 'ch') {
+    b.labels = genLabels(1, 2, 3);
+    b.from = 1;
+    b.to = b.labels.length;
+  }
+  return b;
+}
+/** 한 칸에 걸리는 시간 고르기 (단위마다 어울리는 값만) */
+export const PACE_OPTS = { page: [2, 3, 5, 8], psg: [5, 10, 15, 20], q: [1, 2, 3, 5], lec: [20, 30, 40, 60], set: [40, 60, 80, 100], ch: [15, 30, 45, 60] };
+
+/** 범위 칸 하나를 바꿨을 때 다른 쪽 맞추기: 시작 > 끝(또는 끝 < 시작)이면 같은 길이만큼 함께 옮긴다 */
+export function fitRange(from, to, which, n, min = 1) {
+  const len = Math.max(0, to - from);
+  if (which === 'from') return n <= to ? [n, to] : [n, n + len];
+  return n >= from ? [from, n] : [Math.max(min, n - len), n];
+}
+
+/** 단계 범위 바꾸기 (교재 범위 안에서). 한 진도는 새 범위 안의 것만 남는다 */
+export function setStageRange(s, from, to) {
+  s.from = from;
+  s.to = to;
+  if (s.marks) s.marks = s.marks.filter((u) => u >= from && u <= to);
+  else if (s.upto != null) s.upto = s.upto < from ? null : Math.min(s.upto, to);
+}
+
+/** 과목 기본 교재 (영어 교과서는 단원으로 등) */
+export function presetBook(subName, bookName) {
+  const pre = SUBJECT_PRESETS.find((p) => p.name === subName);
+  return newBook(bookName, pre && pre.units ? pre.units[bookName] : undefined);
+}
+/** 과목에 교재를 더할 때 단위: 이름으로 짐작, 아니면 그 과목에서 가장 많이 쓰는 단위 */
+export function bookFor(sub, name) {
+  if (guessUnit(name)) return newBook(name);
+  const pre = SUBJECT_PRESETS.find((p) => p.name === sub.name);
+  if (pre && pre.units && pre.units[name]) return newBook(name, pre.units[name]);
+  const used = sub.books.map((b) => bookUnit(sub, b));
+  const common = used.sort((a, b) => used.filter((x) => x === b).length - used.filter((x) => x === a).length)[0];
+  return newBook(name, common === 'ch' ? 'page' : common || 'page');
+}
+
+/**
+ * 교재 범위 바꾸기: 그 교재를 쓰는 단계도 함께 바꾼다 (전에는 교재만 바뀌고 단계는 옛 범위 그대로였다).
+ * 한 진도는 새 범위 안이면 그대로 둔다. 교재 전체를 쓰던 단계는 새 범위 전체로.
+ */
+export function setBookRange(sub, b, from, to) {
+  const of = b.from, ot = b.to;
+  b.from = from;
+  b.to = to;
+  for (const s of sub.stages) {
+    if (s.bookId !== b.id) continue;
+    const whole = s.from === of && s.to === ot;
+    let nf = whole ? from : Math.max(from, s.from);
+    let nt = whole ? to : Math.min(to, s.to);
+    if (nf > nt) (nf = from), (nt = to);
+    s.from = nf;
+    s.to = nt;
+    if (s.marks) s.marks = s.marks.filter((u) => u >= nf && u <= nt);
+    else if (s.upto != null) s.upto = s.upto < nf ? null : Math.min(s.upto, nt);
+  }
+}
+
+/** 단원 이름 바꾸기: 채운 칸은 이름으로 찾아 옮긴다 (가운데에 하나 끼워 넣어도 맞게) */
+export function setBookLabels(sub, b, labels) {
+  const old = b.labels || null;
+  const nameOf = (u) => (old ? old[u - 1] : String(u));
+  const n = labels.length;
+  if (!n) return;
+  b.labels = labels;
+  b.from = 1;
+  b.to = n;
+  for (const s of sub.stages) {
+    if (s.bookId !== b.id) continue;
+    const had = new Set((s.marks || []).map(nameOf));
+    s.from = 1;
+    s.to = n;
+    s.marks = labels.map((l, i) => (had.has(l) ? i + 1 : 0)).filter(Boolean);
+    s.upto = null;
+  }
+}
+
+/**
+ * 교재 단위 바꾸기. 적어 둔 진도는 옮길 수 있으면 옮긴다:
+ * 쪽 → 칸: 읽은 데까지를 칸으로 / 칸 → 쪽: 처음부터 이어서 채운 데까지 / 칸 ↔ 칸: 그대로.
+ * 단원 이름은 단원일 때만 둔다.
+ */
+export function setBookUnit(sub, b, unit) {
+  const was = bookUnit(sub, b);
+  if (was === unit) return;
+  const wasCell = unitDef(was).cell, cell = unitDef(unit).cell;
+  b.unit = unit;
+  if (unit !== 'ch') delete b.labels;
+  delete b.pace; // 걸리는 시간은 단위마다 다르다 → 새 단위 기본값으로
+  for (const s of sub.stages) {
+    if (s.bookId !== b.id) continue;
+    if (wasCell && !cell) {
+      const m = new Set(s.marks || []);
+      let u = s.from - 1;
+      while (u < s.to && m.has(u + 1)) u++;
+      s.upto = u >= s.from ? u : null;
+      delete s.marks;
+    } else if (!wasCell && cell) {
+      s.marks = [];
+      if (s.upto != null) for (let u = s.from; u <= Math.min(s.upto, s.to); u++) s.marks.push(u);
+      s.upto = null;
+    }
+  }
 }
 
 // ─────────── 파일로 내보내기 / 불러오기 ───────────
@@ -1105,12 +1521,17 @@ export function loadDemo() {
   const b = blank();
   const data = b.data;
   data.onboarded = true;
+  data.demo = true;
   data.exam = { id: 'ex-now', name: '2학기 중간고사', kind: 'mid', date: addDays(T, 11), start: addDays(T, -9) };
-  const mk = (name, books, ups, unit) => {
+  // books: [이름, 시작, 끝, 개념/문제, 단위, 단원 이름]
+  const mk = (name, books, ups) => {
     const sub = newSubjectFor(data, name);
-    if (unit) sub.unit = unit;
-    sub.books = books.map(([n, f, t, k]) => ({ id: uid(), name: n, kind: k || bookKind(n), from: f, to: t }));
-    sub.stages = buildStages(sub.books, 'mine', unit === 'passage');
+    sub.books = books.map(([n, f, t, k, unit, labels]) => {
+      const b = { id: uid(), name: n, kind: k || bookKind(n), unit: unit || 'page', from: f, to: t };
+      if (labels) b.labels = labels;
+      return b;
+    });
+    sub.stages = buildStages(sub.books, 'mine');
     sub.stages.forEach((s, i) => {
       const u = ups[i];
       if (s.marks) s.marks = u === 'all' ? Array.from({ length: pages(s) }, (_, k) => s.from + k) : u || [];
@@ -1126,7 +1547,7 @@ export function loadDemo() {
   };
   mk('통합사회', [['자습서', 8, 96], ['평가문제집', 1, 40], ['심화문제집', 1, 36]], ['all', 30]);
   mk('공통수학', [['개념원리', 1, 38], ['쎈', 1, 52], ['일품', 1, 34]], ['all', 'all', 10]);
-  mk('공통영어', [['교과서 본문', 1, 8, '개념'], ['부교재 지문', 1, 16, '문제']], ['all', [1, 2, 3, 5, 6, 8, 9, 10, 11, 12], [1, 2, 3], []], 'passage');
+  mk('공통영어', [['교과서 본문', 1, 8, '개념', 'ch', genLabels(1, 2, 4)], ['부교재 지문', 1, 16, '문제', 'psg']], ['all', [1, 2, 3, 5, 6, 8, 9, 10, 11, 12], [1, 2, 3], []]);
   mk('공통국어', [['자습서', 1, 40], ['평가문제집', 1, 30]], [29]);
   mk('통합과학', [['교과서', 1, 42], ['문제집', 1, 40], ['기출문제집', 1, 30]], ['all', 9]);
   mk('한국사', [['교과서', 1, 36], ['문제집', 1, 30]], ['all', 'all', 11]);

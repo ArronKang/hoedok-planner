@@ -117,8 +117,10 @@ export function createClient({ url, key }) {
     rpc(fn, args) {
       return request('POST', '/rest/v1/rpc/' + fn, { body: args });
     },
-    selectRecords(afterRev, limit = 1000) {
-      return request('GET', `/rest/v1/records?select=tbl,id,data,deleted,client_updated_at,rev&rev=gt.${afterRev}&order=rev.asc&limit=${limit}`);
+    /** prefix: 이 이름으로 시작하는 표만 / skip: 이 이름으로 시작하는 표는 빼고 (기록 공간 나누기, src/env.js) */
+    selectRecords(afterRev, limit = 1000, { prefix = '', skip = '' } = {}) {
+      const sp = prefix ? `&tbl=like.${encodeURIComponent(prefix)}*` : skip ? `&tbl=not.like.${encodeURIComponent(skip)}*` : '';
+      return request('GET', `/rest/v1/records?select=tbl,id,data,deleted,client_updated_at,rev&rev=gt.${afterRev}${sp}&order=rev.asc&limit=${limit}`);
     },
     async upload(path, blob) {
       return request('POST', '/storage/v1/object/attachments/' + path, {

@@ -22,7 +22,7 @@ function finishAll() {
   return bad.length;
 }
 const anims = (sel) => document.getAnimations().filter((a) => !sel || (a.effect && a.effect.target && a.effect.target.closest && a.effect.target.closest(sel)));
-const ghosts = () => document.querySelectorAll('.ghost').length;
+const ghosts = () => document.querySelectorAll('.m-ghost').length;
 const opaque = (sel) => [...document.querySelectorAll(sel)].every((e) => getComputedStyle(e).opacity === '1');
 
 export async function run({ level = 'normal', quiet = false, fast = true } = {}) {
@@ -86,7 +86,7 @@ async function runInner(level, quiet) {
   C.closeSheet();
   await settle();
   if (level !== 'off') {
-    const g = document.querySelector('.ghost');
+    const g = document.querySelector('.m-ghost');
     check('M2 닫을 때 복사본이 흐려짐', !!g);
     if (g) {
       check('D1 복사본은 누를 수 없음', getComputedStyle(g).pointerEvents === 'none');
@@ -94,7 +94,7 @@ async function runInner(level, quiet) {
       check('K1 복사본은 기기 틀 안 (디자인 색 그대로)', g.parentNode === dev);
       const r = g.querySelector('.sheet').getBoundingClientRect();
       const under = document.elementFromPoint(r.left + r.width / 2, r.top + 30);
-      check('D1 사라지는 동안 뒤 화면을 누를 수 있음', under && !under.closest('.ghost'));
+      check('D1 사라지는 동안 뒤 화면을 누를 수 있음', under && !under.closest('.m-ghost'));
     }
   } else check('E1 끄기: 복사본 없음', ghosts() === 0);
   await idle('A 창 닫기');
@@ -139,7 +139,7 @@ async function runInner(level, quiet) {
   C.closeSheet();
   await settle();
   if (level !== 'off') {
-    const gb = document.querySelector('.ghost .sheet-b');
+    const gb = document.querySelector('.m-ghost .sheet-b');
     check('F1 사라지는 창이 맨 위로 튀지 않음', gb && Math.abs(gb.scrollTop - top) < 2, `${gb && gb.scrollTop} / ${top}`);
   }
   await idle('F1');
@@ -152,7 +152,7 @@ async function runInner(level, quiet) {
   C.closeSheet();
   await settle();
   if (level !== 'off') {
-    const gi = document.querySelector('.ghost input.input');
+    const gi = document.querySelector('.m-ghost input.input');
     check('F2 사라지는 창에 적던 글자 그대로', gi && gi.value === '적던 글자');
   }
   await idle('F2');
@@ -228,6 +228,59 @@ async function runInner(level, quiet) {
   await settle();
   check('I2 Esc로 닫힘', !C.UI().sheet);
   await idle('I2 Esc');
+
+  // ── 베타 1.0: 겹쳐 바뀜(M) · 휴대폰 창 기기 스크롤(N) · 유리 막대 렌즈(O) ──
+  C.go('progress');
+  await shown();
+  await idle('M 준비');
+  const subs = C.D().subjects.filter((x) => x.stages.length);
+  C.push('progress', { view: 'subject', id: subs[0].id }, true);
+  await settle();
+  if (level !== 'off') {
+    check('M1 화면을 바꾸면 옛 화면 복사본이 겹쳐 흐려짐', document.querySelectorAll('.m-view').length === 1);
+    C.push('progress', { view: 'subject', id: subs[1].id }, true);
+    await settle();
+    check('M2 연달아 바꿔도 복사본이 쌓이지 않음', document.querySelectorAll('.m-view').length <= 1);
+  } else check('M4 끄기: 겹쳐 바뀜 복사본 없음', document.querySelectorAll('.m-view').length === 0);
+  await idle('M 겹쳐 바뀜');
+  check('M2 끝나면 복사본 0', document.querySelectorAll('.m-view').length === 0);
+  C.setUI({ stacks: { today: [], progress: [], grades: [] } });
+  C.go('today');
+  await idle('M 정리');
+  // N: 손가락 기기의 휴대폰 창
+  const touch = matchMedia('(pointer: coarse)').matches && C.UI().dev === 'phone';
+  if (touch) {
+    C.openSheet({ type: 'todayMenu' });
+    await shown();
+    await wait(60);
+    const sc = document.querySelector('.sheet-layer .sheet-sc');
+    // 거꾸로 쌓은 상자: 열린 자리 = scrollTop 0, 닫힌 자리 = -(최대)
+    check('N1 창은 처음부터 열린 자리 (위치를 옮기지 않아도)', !!sc && Math.abs(sc.scrollTop) <= 2 && getComputedStyle(sc).flexDirection === 'column-reverse');
+    if (sc) {
+      sc.scrollTop = -(sc.scrollHeight - sc.clientHeight);
+      sc.dispatchEvent(new Event('scroll')); // 가려진 창에서는 스크롤 알림이 늦게 오므로 직접
+      await settle();
+      check('N2 끝까지 끌어내리면 닫힘', !C.UI().sheet);
+      check('N2 끌어 닫으면 사라지는 복사본 없음', ghosts() === 0);
+    }
+    await idle('N 끌어 닫기');
+  }
+  // O: 유리 막대
+  const keepBar = C.PR().tabStyle;
+  C.setPrefs({ tabStyle: 'glass' });
+  await settle();
+  if (C.UI().dev === 'phone') {
+    before = snap();
+    C.go('progress');
+    await settle();
+    if (level !== 'off') check('O1 탭을 바꾸면 렌즈가 미끄러짐', fresh('.lens', before).length > 0);
+    else check('O3 끄기: 렌즈 움직임 없음', fresh('.lens', before).length === 0);
+    await idle('O 렌즈');
+    C.go('today');
+    await idle('O 정리');
+  }
+  C.setPrefs({ tabStyle: keepBar });
+  await settle();
 
   // ── 끄기(E1): 아무것도 움직이지 않음 ──
   if (level === 'off') {

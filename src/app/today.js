@@ -2,8 +2,9 @@
 import { html } from '../lib/html.js';
 import { useState, useRef, useEffect } from '../lib/ui.js';
 import * as C from './core.js';
-import { Icon, Check, Sheet, Swipe, hue, Seg, Stepper, isPad } from './kit.js';
+import { Icon, Check, Sheet, Swipe, hue, Seg, Stepper, isPad, NumField, DateField, glassBar } from './kit.js';
 import { savePhoto, photoURL } from './photos.js';
+import { installHintOn, hideInstallHint, openInstall } from './pwa.js';
 
 const { D, PR, UI, today, viewDay, setUI, openSheet, closeSheet, commit, withUndo, toast, subById, taskStage, taskPages, taskMinutes, tasksOn, overdue, addDays, diffDays, mdw, mdws, md, minutes, P } = C;
 
@@ -23,13 +24,14 @@ function TaskRow({ t, showSubject }) {
   const tomorrow = () => withUndo('내일로 옮겼어요', () => C.moveTask(t.id, addDays(t.date > td ? t.date : td, 1)));
   const complete = () => (t.status === 'done' ? null : C.toggleTask(t.id));
   const meta = [];
-  if (t.at) meta.push(html`<span key="a" class="num">${t.at}</span>`);
+  if (t.at) meta.push(html`<span key="a" class="num">${C.clock(t.at)}</span>`);
   if (showSubject && sub) meta.push(html`<span key="s">${sub.name}</span>`);
   if (t.kind === 'track') {
     const bn = st ? C.bookOf(sub, st)?.name || '' : '';
     meta.push(html`<span key="p">${st && bn && !st.name.includes(bn) ? bn + ' ' : ''}${C.trng(t)}</span>`);
   }
   if (t.due) meta.push(html`<span key="d">마감 ${md(t.due)}</span>`);
+  if (PR().rowEst && t.kind === 'track' && taskMinutes(t)) meta.push(html`<span key="e">약 ${minutes(taskMinutes(t))}</span>`);
   if ((t.photos || []).length) meta.push(html`<span key="ph">사진 ${t.photos.length}</span>`);
   if (t.memo) meta.push(html`<span key="me">메모</span>`);
   if ((t.moves || []).length && t.status !== 'done') meta.push(html`<span key="m" class="moved">${t.moves.length}번 미룸</span>`);
@@ -53,7 +55,7 @@ function TaskRow({ t, showSubject }) {
       <div class="amt">${reps
         ? html`<span class="num">${t.status === 'done' ? reps : t.repDone || 0}</span>/${reps}번`
         : t.kind === 'track'
-          ? html`<span class="num">${taskPages(t)}</span>${C.unitOf(sub)}`
+          ? html`<span class="num">${taskPages(t)}</span>${C.unitShort(C.taskUnit(t))}`
           : t.est
             ? minutes(t.est)
             : ''}</div>
@@ -65,8 +67,8 @@ function Summary({ list, day }) {
   const open = UI().open.summary;
   const live = list.filter((t) => t.status !== 'dropped');
   const doneN = live.filter((t) => t.status === 'done').length;
-  const amt = (l) => C.mix(l.filter((t) => t.kind === 'track').map((t) => [subById(t.subjectId), taskPages(t)]));
-  const all = amt(live), fin = amt(live.filter((t) => t.status === 'done'));
+  const all = C.taskTally(live), fin = C.taskTally(live.filter((t) => t.status === 'done'));
+  const units = C.UNITS.filter((u) => all[u.id]).slice(0, 2);
   const mins = C.plannedMinutes(live);
   const cap = C.capacity(day);
   const bySub = D().subjects.map((s) => [s, live.filter((t) => t.subjectId === s.id)]).filter(([, l]) => l.length);
@@ -74,15 +76,14 @@ function Summary({ list, day }) {
     <button class="summary" onClick=${() => setUI({ open: { ...UI().open, summary: !open } })} aria-expanded=${open ? 'true' : 'false'}>
       <div class="line">
         <span><b>${doneN}</b> / ${live.length}개</span>
-        ${all.p ? html`<span><b>${fin.p}</b> / ${all.p}쪽</span>` : null}
-        ${all.q ? html`<span><b>${fin.q}</b> / ${all.q}지문</span>` : null}
+        ${units.map((u) => html`<span key=${u.id}><b>${fin[u.id] || 0}</b> / ${C.amountText(u.id, all[u.id], true)}</span>`)}
         <span class="caret">${open ? '접기' : '자세히'}</span>
       </div>
       <div class="sumbar" aria-hidden="true"><i style=${{ width: `${live.length ? (doneN / live.length) * 100 : 0}%` }}></i></div>
     </button>
     ${open
       ? html`<div class="sumdetail appear">
-          ${bySub.map(([s, l]) => html`<div class="r hue" key=${s.id} style=${hue(s.h)}><span class="dot"></span><span>${s.name}</span><span class="num">${l.filter((t) => t.status === 'done').length}/${l.length}개 · ${C.amount(s, l.reduce((a, t) => a + taskPages(t), 0))}</span></div>`)}
+          ${bySub.map(([s, l]) => html`<div class="r hue" key=${s.id} style=${hue(s.h)}><span class="dot"></span><span>${s.name}</span><span class="num">${l.filter((t) => t.status === 'done').length}/${l.length}개${l.some((t) => t.kind === 'track') ? ` · ${C.tallyText(C.taskTally(l))}` : ''}</span></div>`)}
           <div style="margin-top:10px" class="row"><span class="sub">예상 시간</span><span class="num" style="margin-left:auto">${minutes(mins)}</span><span class="muted">/ 공부 가능 ${cap ? minutes(cap) : '없음'}</span></div>
           ${cap ? html`<div class="capbar"><i style=${{ width: `${Math.min(100, (mins / Math.max(mins, cap)) * 100)}%` }}></i><b style=${{ left: `${(cap / Math.max(mins, cap)) * 100}%` }}></b></div>` : null}
           <${DayCap} day=${day} />
@@ -127,7 +128,16 @@ function Banners({ day }) {
   const od = overdue();
   if (od.length && p.show.overdue)
     out.push(html`<button class="banner" key="od" onClick=${() => openSheet({ type: 'endday', past: true })}><span>지난 날 못 끝낸 <b class="num">${od.length}</b>개가 있어요</span><span class="go">정리하기</span></button>`);
-  return out.length ? html`<div class="stack">${out}</div>` : null;
+  // 예시를 보는 중이면 빠져나가는 길을 한 줄로 (설정 맨 위의 '예시 끝내기'로)
+  if (C.isDemo()) out.push(html`<button class="banner quiet" key="demo" onClick=${() => openSheet({ type: 'settings' })}><span>예시 기록을 보고 있어요</span><span class="go">내 기록으로 시작</span></button>`);
+  // 브라우저 창으로 열었을 때만: 홈 화면에 추가하면 앱처럼 열려요 (닫으면 다시 안 뜸)
+  if (installHintOn())
+    out.push(html`<div class="banner quiet with-x" key="inst">
+      <button class="b" onClick=${openInstall}><span>홈 화면에 추가하면 앱처럼 열려요</span><span class="go">방법</span></button>
+      <button class="x" aria-label="이 안내 닫기" onClick=${hideInstallHint}><${Icon} n="x" s=${16} /></button>
+    </div>`);
+  // 알림 줄은 한 장에 모아서 (상자를 여러 개 쌓지 않게)
+  return out.length ? html`<div class="banners">${out}</div>` : null;
 }
 
 export function TodayScreen({ compact }) {
@@ -135,15 +145,33 @@ export function TodayScreen({ compact }) {
   const day = viewDay();
   const p = PR();
   const ex = D().exam;
-  const list = tasksOn(day);
+  const all = tasksOn(day);
+  // 끝낸 일 숨기기: 목록에서 빼고 맨 아래에 '끝낸 일 N개 보기' 한 줄
+  const hideDone = C.doneMode() === 'hide' && !UI().open.showDone;
+  const doneN = all.filter((t) => t.status === 'done').length;
+  const list = hideDone ? all.filter((t) => t.status !== 'done') : all;
   let body;
-  if (!list.length) {
+  if (!all.length) {
+    // 할 일이 없을 때: 왜 없는지에 맞춰 다음에 할 일 하나를 크게 (막연히 '＋를 눌러 보세요' 대신)
+    const subs = D().subjects;
+    const noBook = subs.find((s) => !s.stages.length);
+    const hasStages = subs.some((s) => s.stages.length);
+    const plannable = hasStages && ex && !C.examDay() && day >= td;
     body = html`<div class="empty">
       <h3>${day === td ? '오늘' : mdws(day)} 할 일이 없어요</h3>
-      ${D().subjects.some((s) => s.stages.length) && ex && !C.examDay()
-        ? html`<p>남은 분량을 ${C.endWord()} ${C.isGoal() ? '' : '전날'}까지 나눠서 날마다 할 양을 넣을 수 있어요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'plan' })}>${C.endWord()}까지 나눠 주기</button>`
-        : html`<p>아래 ＋로 할 일을 넣어 보세요.</p>`}
+      ${!subs.length
+        ? html`<p>먼저 준비할 과목을 넣어 주세요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'addSubject' })}>과목 넣기</button>`
+        : !hasStages
+          ? html`<p>과목마다 쓰는 교재와 시험 범위를 넣으면 날마다 할 양이 저절로 생겨요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'setup', id: noBook.id })}>${noBook.name} 교재 넣기</button>`
+          : plannable
+            ? html`<p>남은 분량을 ${C.endWord()} ${C.isGoal() ? '' : '전날'}까지 나눠서 날마다 할 양을 넣을 수 있어요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'plan' })}>${C.endWord()}까지 나눠 주기</button>`
+            : !ex
+              ? html`<p>다음 시험이나 끝낼 날을 정하면 날마다 할 양을 나눠 드려요.</p><button class="btn pri" onClick=${() => openSheet({ type: 'cycle', step: 'next' })}>시험 정하기</button>`
+              : null}
+      <button class="btn ghost" style="margin-top:6px" onClick=${() => openSheet({ type: 'add' })}>할 일 직접 넣기</button>
     </div>`;
+  } else if (!list.length) {
+    body = html`<div class="empty small"><h3>다 끝냈어요</h3><p>끝낸 ${doneN}개는 숨겨 두었어요.</p></div>`;
   } else if (p.group === 'subject') {
     // 하루 할 일은 한 장에: 과목은 상자 대신 제목줄로 나눈다 (한 화면에 더 많이, 덜 어지럽게)
     body = html`<div class="daylist">${D()
@@ -168,18 +196,21 @@ export function TodayScreen({ compact }) {
         <span class="kicker">${day === td ? mdw(day) : diffDays(td, day) === 1 ? '내일' : diffDays(td, day) === -1 ? '어제' : ''}</span>
       </div>
       ${day !== td ? html`<button class="btn sm quiet" onClick=${() => setUI({ day: null })}>오늘로</button>` : null}
-      ${ex && p.show.dday && dday > 0 ? html`<button class="dday-chip" onClick=${() => C.go('progress')}>${ex.name.replace(/^\d학기 /, '')}<b>D-${dday}</b></button>` : null}
+      ${ex && p.show.dday && dday > 0 ? html`<button class="dday-chip" onClick=${() => C.go('progress')}>${ex.name.replace(/^\d학기 /, '')}<b>${p.ddayStyle === 'days' ? `${dday}일 남음` : `D-${dday}`}</b></button>` : null}
       ${isPad() ? html`<button class="ib" aria-label="할 일 추가" title="할 일 추가" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" /></button>` : null}
       <button class="ib" aria-label="더 보기" onClick=${() => openSheet({ type: 'todayMenu' })}><${Icon} n="more" /></button>
     </header>
     <div class="scroll"><div class="body">
       <${Banners} day=${day} />
-      ${list.length && p.show.summary ? html`<${Summary} list=${list} day=${day} />` : null}
+      ${all.length && p.show.summary ? html`<${Summary} list=${all} day=${day} />` : null}
       ${body}
-      ${list.length ? html`<button class="addline" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" s=${20} />할 일 추가</button>` : null}
+      ${C.doneMode() === 'hide' && doneN
+        ? html`<button class="foot-link" onClick=${() => setUI({ open: { ...UI().open, showDone: !UI().open.showDone } })}>${hideDone ? `끝낸 일 ${doneN}개 보기` : '끝낸 일 숨기기'}</button>`
+        : null}
+      ${all.length && isPad() ? html`<button class="addline" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" s=${20} />할 일 추가</button>` : null}
       ${D().tasks.some((t) => t.date < td) ? html`<button class="foot-link" onClick=${() => openSheet({ type: 'week' })}>이번 주 돌아보기 ›</button>` : null}
     </div></div>
-    ${!isPad() && !compact ? html`<button class="fab" aria-label="할 일 추가" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" w=${2.2} /></button>` : null}
+    ${!isPad() && !compact && !glassBar() ? html`<button class="fab" aria-label="할 일 추가" onClick=${() => openSheet({ type: 'add' })}><${Icon} n="plus" w=${2.2} /></button>` : null}
   </div>`;
 }
 
@@ -210,44 +241,53 @@ export function TaskSheet({ id }) {
   const t = D().tasks.find((x) => x.id === id);
   const [mode, setMode] = useState(null);
   const [upto, setUpto] = useState(null);
+  const [picked, setPicked] = useState([]);
   const [rest, setRest] = useState('tomorrow');
   if (!t) return html`<${Sheet} title="할 일"><p class="muted">삭제된 할 일이에요.</p><//>`;
   const sub = subById(t.subjectId);
   const st = taskStage(t);
+  const book = st ? C.bookOf(sub, st) : null;
   const td = today();
   const more = UI().open.taskMore;
   const next = addDays(t.date > td ? t.date : td, 1);
+  const cells = !!(st && st.marks);
+  const k = C.taskUnit(t);
   const val = upto ?? t.from + Math.floor((t.to - t.from) / 2);
-  const psg = C.isPsg(sub);
-  const U = C.unitOf(sub);
   const reps = t.reps > 1 ? t.reps : 0;
   const rule = t.rep && C.repeatById(t.rep);
   // 반복하는 일이면 이름·시간 등은 그 뒤 반복에도 같이 바뀐다 (core.editTask)
-  const set = (k, v) => {
-    C.editTask(t, k, v);
+  const set = (k2, v) => {
+    C.editTask(t, k2, v);
     commit();
   };
+  const ESTS = [15, 30, 45, 60, 90];
 
   let actions;
   if (mode === 'partial' && st) {
+    const all = C.unitsOf(t);
+    const did = cells ? all.filter((u) => picked.includes(u)) : all.filter((u) => u <= val);
+    const left = all.filter((u) => !did.includes(u));
+    const leftRun = left.length && left.length === left[left.length - 1] - left[0] + 1;
     actions = html`<div class="hue appear" style=${hue(sub.h)}>
-      <p class="sub" style="margin:0 0 4px;text-align:center">${C.trng(t)} 중 ${psg ? '몇 번 지문까지' : '어디까지'} 했어요?</p>
-      <div class="upto"><input class="input big" inputmode="numeric" value=${String(val)} onInput=${(e) => setUpto(C.clamp(parseInt(e.target.value) || t.from - 1, t.from - 1, t.to))} aria-label=${psg ? '몇 번 지문까지' : '몇 쪽까지'} />${psg ? '번까지' : '쪽까지'}</div>
-      <input class="range" type="range" min=${t.from - 1} max=${t.to} value=${val} onInput=${(e) => setUpto(+e.target.value)} aria-label=${psg ? '몇 번 지문까지' : '몇 쪽까지'} />
-      <div class="range-x"><span>안 함</span><span>${t.to}</span></div>
-      <p class="result">한 양 <b>${C.unitsOf(t).filter((u) => u <= val).length}</b> / ${taskPages(t)}${U}</p>
-      ${val < t.to
-        ? html`<span class="label">남은 ${(() => {
-            const l = C.unitsOf(t).filter((u) => u > val);
-            return C.rng(sub, l[0], l[l.length - 1], t.units ? l : null);
-          })()}</span><${Seg} label="남은 분량" value=${rest} onChange=${setRest} options=${[['tomorrow', '내일로 넘기기'], ['drop', '안 하기']]} />`
+      ${cells
+        ? html`<p class="sub" style="margin:0 0 10px;text-align:center">${C.trng(t)} 중 한 것을 눌러 주세요</p>
+            <div class=${'numgrid' + (book && book.labels && book.labels.some((l) => l.length > 4) ? ' wide' : '')}>${all.map(
+              (u) => html`<button key=${u} class=${book && book.labels ? '' : 'num'} aria-pressed=${picked.includes(u) ? 'true' : 'false'} aria-label=${C.itemName(sub, book, u)} onClick=${() => setPicked(picked.includes(u) ? picked.filter((x) => x !== u) : [...picked, u])}>${C.itemShort(book, u)}</button>`,
+            )}</div>`
+        : html`<p class="sub" style="margin:0 0 4px;text-align:center">${C.trng(t)} 중 어디까지 했어요?</p>
+            <div class="upto"><${NumField} cls="input big" value=${val < t.from ? null : val} empty min=${t.from} max=${t.to} unit="쪽" placeholder="–" label="몇 쪽까지" onLive=${(n) => n != null && setUpto(n)} onCommit=${(n) => setUpto(n == null ? t.from - 1 : n)} />쪽까지</div>
+            <input class="range" type="range" min=${t.from - 1} max=${t.to} value=${val} onInput=${(e) => setUpto(+e.target.value)} aria-label="몇 쪽까지" />
+            <div class="range-x"><span>안 함</span><span>${t.to}</span></div>`}
+      <p class="result">한 양 <b>${did.length}</b> / ${C.amountText(k, C.taskPages(t), true)}</p>
+      ${left.length && did.length
+        ? html`<span class="label">남은 ${C.rangeText(sub, book, left[0], left[left.length - 1], leftRun ? null : left)}</span><${Seg} label="남은 분량" value=${rest} onChange=${setRest} options=${[['tomorrow', '내일로 넘기기'], ['drop', '안 하기']]} />`
         : null}
       <div class="btns" style="margin-top:16px">
         <button class="btn" onClick=${() => setMode(null)}>취소</button>
-        <button class="btn pri" onClick=${() => {
-          withUndo('반영했어요', () => C.partialTask(t.id, val, rest));
+        <button class="btn pri" disabled=${!did.length} onClick=${() => {
+          withUndo('반영했어요', () => C.partialTask(t.id, val, rest, cells ? picked : null));
           closeSheet();
-        }}>저장</button>
+        }}>${did.length === all.length ? '다 했어요' : '저장'}</button>
       </div>
     </div>`;
   } else if (t.status === 'todo') {
@@ -256,7 +296,7 @@ export function TaskSheet({ id }) {
         C.toggleTask(t.id);
         closeSheet();
       }}>${reps ? `한 번 더 했어요 · ${(t.repDone || 0) + 1}/${reps}` : '다 했어요'}</button>
-      ${st ? html`<button class="btn" onClick=${() => setMode('partial')}>일부만 했어요</button>` : null}
+      ${st && C.taskPages(t) > 1 ? html`<button class="btn" onClick=${() => setMode('partial')}>일부만 했어요</button>` : null}
       <button class="btn" onClick=${() => {
         withUndo(`${mdws(next)}(으)로 옮겼어요`, () => C.moveTask(t.id, next));
         closeSheet();
@@ -274,19 +314,16 @@ export function TaskSheet({ id }) {
     actions = html`<button class="btn block" onClick=${() => C.toggleTask(t.id)}>다시 할 일로</button>`;
   }
 
+  const bn = book ? book.name : '';
   return html`<${Sheet} title=${sub ? sub.name : '할 일'}>
     <div class="hue" style=${hue(sub ? sub.h : 0)}>
       ${t.kind === 'free'
-        ? html`<input class="input" style="font-size:1.15em;font-weight:650" key=${'t' + t.id} defaultValue=${t.title} aria-label="할 일 이름" onChange=${(e) => set('title', e.target.value.trim() || t.title)} />`
+        ? html`<input class="input" style="font-size:1.15em;font-weight:650" key=${'t' + t.id} defaultValue=${t.title} aria-label="할 일 이름" enterkeyhint="done" onChange=${(e) => set('title', e.target.value.trim() || t.title)} />`
         : html`<h3 style="margin:0 0 2px;font-size:1.25em">${st ? st.name : ''}</h3>
-          <p class="sub" style="margin:0">${(() => {
-            // 단계 이름에 교재 이름이 들어 있으면 또 쓰지 않는다 (2회독 · 평가문제집 → p.31–40)
-            const bn = st ? C.bookOf(sub, st)?.name || '' : '';
-            return `${bn && !st.name.includes(bn) ? bn + ' ' : ''}${C.trng(t)} · ${C.amount(sub, taskPages(t))}`;
-          })()}</p>`}
+          <p class="sub" style="margin:0">${bn && st && !st.name.includes(bn) ? bn + ' ' : ''}${C.trng(t)} · ${C.amountText(k, taskPages(t))}</p>`}
       <div style="margin:16px 0 14px">${actions}</div>
       ${t.kind === 'track' && sub ? html`<div class="kv"><span class="k">진도</span><button class="v" onClick=${() => C.push('progress', { view: 'subject', id: sub.id }, true)}>${sub.name} ${P(C.pct(sub))} ›</button></div>` : null}
-      <div class="kv"><span class="k">날짜</span><span class="v">${mdws(t.date)}${t.at ? ` · ${t.at}` : ''}</span></div>
+      <div class="kv"><span class="k">날짜</span><span class="v">${mdws(t.date)}${t.at ? ` · ${C.clock(t.at)}` : ''}</span></div>
       ${rule ? html`<div class="kv"><span class="k">반복</span><span class="v">${C.daysText(rule.days)}</span></div>` : null}
       ${t.due ? html`<div class="kv"><span class="k">마감</span><span class="v">${mdws(t.due)}${t.status === 'todo' ? ` · ${dueLeft(t.due)}` : ''}</span></div>` : null}
       ${reps ? html`<div class="kv"><span class="k">한 횟수</span><span class="v">${t.status === 'done' ? reps : t.repDone || 0} / ${reps}번 ${(t.repDone || 0) > 0 && t.status === 'todo' ? html`<button class="linkbtn" onClick=${() => set('repDone', t.repDone - 1)}>하나 빼기</button>` : null}</span></div>` : null}
@@ -312,10 +349,16 @@ export function TaskSheet({ id }) {
               <input class="input" type="time" style="max-width:160px" key=${'at' + t.id + (t.at || '')} defaultValue=${t.at || ''} onChange=${(e) => set('at', e.target.value || null)} aria-label="시작 시각" />
               ${t.at ? html`<button class="btn sm quiet" onClick=${() => set('at', null)}>지우기</button>` : null}
             </div>
-            <span class="label">예상 시간</span>
-            <div class="chips">${[15, 30, 45, 60, 90].map((m) => html`<button key=${m} class="chip" aria-pressed=${(t.est || (t.kind === 'track' ? taskMinutes(t) : 0)) === m ? 'true' : 'false'} onClick=${() => set('est', m)}>${minutes(m)}</button>`)}</div>
+            <span class="label">예상 시간${t.kind === 'track' && !t.est ? html` <span class="muted" style="font-weight:500">— 지금은 분량으로 계산한 ${minutes(taskMinutes(t))}</span>` : null}</span>
+            <div class="chips">
+              ${ESTS.map((m) => html`<button key=${m} class="chip" aria-pressed=${t.est === m ? 'true' : 'false'} onClick=${() => set('est', t.est === m ? null : m)}>${minutes(m)}</button>`)}
+              <span class="row est-own"><${NumField} value=${t.est && !ESTS.includes(t.est) ? t.est : null} empty min=${1} max=${600} unit="분" placeholder="직접" label="예상 시간 직접 적기(분)" onCommit=${(n) => set('est', n)} /><span class="muted small">분</span></span>
+            </div>
             <span class="label">마감일</span>
-            <input class="input" type="date" style="max-width:220px" key=${'due' + t.id} defaultValue=${t.due || ''} onChange=${(e) => set('due', e.target.value || null)} />
+            <div class="row">
+              <${DateField} style="max-width:220px" value=${t.due || ''} label="마감일" onCommit=${(v) => set('due', v)} />
+              ${t.due ? html`<button class="btn sm quiet" onClick=${() => set('due', null)}>지우기</button>` : null}
+            </div>
             <span class="label">메모</span>
             <textarea class="input" rows="3" key=${'memo' + t.id} defaultValue=${t.memo || ''} placeholder="예: 준비물, 범위" onChange=${(e) => set('memo', e.target.value)}></textarea>
             ${(t.photos || []).length ? null : html`<span class="label">사진 <span class="muted" style="font-weight:500">— 예: 수행평가 안내문. 이 기기에만 저장돼요</span></span><${Photos} t=${t} />`}
@@ -465,9 +508,31 @@ export function PhotoSheet({ id, task }) {
   <//>`;
 }
 
-export function AddSheet() {
+/**
+ * 과목에서 '다음에 할 것' 하나: 앞으로 잡아 둔 진도 할 일 중 가장 이른 것(그날보다 뒤).
+ * 없으면 지금 단계에서 아직 안 한 앞부분. → 할 일 추가에서 한 번에 당겨 오거나 넣는다.
+ */
+function nextChunk(sub, day) {
+  if (!sub) return null;
+  const planned = D()
+    .tasks.filter((t) => t.subjectId === sub.id && t.kind === 'track' && t.status === 'todo' && !t.hist && t.date > day)
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0))[0];
+  if (planned) return { task: planned };
+  const cs = C.curStage(sub);
+  if (!cs) return null;
+  const b = C.bookOf(sub, cs);
+  const k = C.stageUnit(sub, cs);
+  const size = { page: 10, psg: 3, q: 10, lec: 1, set: 1, ch: 1 }[k] || 3;
+  const free = [];
+  for (let u = cs.from; u <= cs.to && free.length < size; u++) if (!C.isMarked(cs, u)) free.push(u);
+  if (!free.length) return null;
+  const run = free.length === free[free.length - 1] - free[0] + 1;
+  return { stage: cs, book: b, from: free[0], to: free[free.length - 1], units: run ? null : free };
+}
+
+export function AddSheet({ subjectId }) {
   const subs = D().subjects;
-  const [sid, setSid] = useState(() => UI().lastSub && subs.some((s) => s.id === UI().lastSub) ? UI().lastSub : subs[0] && subs[0].id);
+  const [sid, setSid] = useState(() => (subjectId && subs.some((s) => s.id === subjectId) ? subjectId : UI().lastSub && subs.some((s) => s.id === UI().lastSub) ? UI().lastSub : subs[0] && subs[0].id));
   const [text, setText] = useState('');
   const [when, setWhen] = useState(viewDay());
   const [added, setAdded] = useState([]);
@@ -478,45 +543,69 @@ export function AddSheet() {
   const sub = subById(sid);
   const link = C.parseLink(text, sub);
   const td = today();
+  const nx = nextChunk(sub, when);
+  // 적는 예: 지금 단계의 교재와 단위로
   const cs = sub && C.curStage(sub);
-  const ex = cs ? (() => {
-    if (C.isPsg(sub)) {
-      const free = [];
-      for (let u = cs.from; u <= cs.to && free.length < 3; u++) if (!C.isMarked(cs, u)) free.push(u);
-      return free.length ? `지문 ${free[0]}-${free[free.length - 1]}` : '지문 1-3';
-    }
-    const a = cs.upto == null ? cs.from : Math.min(cs.to, cs.upto + 1);
-    return `${C.bookOf(sub, cs)?.name || ''} p.${a}-${Math.min(cs.to, a + 9)}`;
+  const example = cs ? (() => {
+    const b = C.bookOf(sub, cs);
+    let u = cs.from;
+    while (u < cs.to && C.isMarked(cs, u)) u++;
+    if (!cs.marks) u = cs.upto == null ? cs.from : Math.min(cs.to, cs.upto + 1);
+    const z = Math.min(cs.to, u + (cs.marks ? 2 : 9));
+    return `${b ? b.name + ' ' : ''}${b && b.labels ? `${C.itemShort(b, u)}~${C.itemShort(b, z)}` : C.stageUnit(sub, cs) === 'page' ? `p.${u}-${z}` : C.rangeText(sub, b, u, z).replace('–', '-')}`;
   })() : '쎈 p.20-35';
+  const note = (title) => {
+    setUI({ lastSub: sid });
+    setAdded([...added, title]);
+  };
   const submit = (e) => {
     e.preventDefault();
     const title = (ref.current ? ref.current.value : text).trim();
     if (!title || !sid) return;
     C.addTask({ title, subjectId: sid, date: when, link: C.parseLink(title, sub) });
-    setUI({ lastSub: sid });
     commit();
-    setAdded([...added, title]);
+    note(title);
     setText('');
     if (ref.current) {
       ref.current.value = '';
       ref.current.focus();
     }
   };
+  const pull = () => {
+    if (!nx) return;
+    if (nx.task) {
+      const t = nx.task;
+      withUndo(`${md(t.date)}에 잡혀 있던 것을 ${when === td ? '오늘' : md(when)}로 당겼어요`, () => C.moveTask(t.id, when));
+      note(`${titleOf(t)} ${C.trng(t)}`);
+    } else {
+      const t = C.addTask({ title: '', subjectId: sid, date: when, link: { stage: nx.stage, from: nx.from, to: nx.to } });
+      if (nx.units) t.units = nx.units;
+      commit();
+      note(`${nx.stage.name} ${C.trng(t)}`);
+    }
+  };
+  const whenWord = when === td ? '오늘' : when === addDays(td, 1) ? '내일' : md(when);
   return html`<${Sheet} title="할 일 추가">
     <form onSubmit=${submit}>
       <input ref=${ref} class="input" style="font-size:1.1em" placeholder="무엇을 할까요?" value=${text} onInput=${(e) => setText(e.target.value)} aria-label="할 일" enterkeyhint="done" autocomplete="off" />
       ${link
-        ? html`<p class="hint hue" style=${{ ...hue(sub.h), color: 'var(--sc)', fontWeight: 600 }}>✓ ${sub.name} · ${link.stage.name} ${C.rng(sub, link.from, link.to)} — 체크하면 진도에 반영돼요</p>`
-        : html`<p class="hint">${C.isPsg(sub) ? '지문 번호를' : '교재 이름과 쪽을 함께'} 적으면 진도에 저절로 반영돼요. 예: ${ex}</p>`}
+        ? html`<p class="hint hue linked" style=${hue(sub.h)}><${Icon} n="check" s=${15} w=${2.4} />${sub.name} · ${link.stage.name} ${C.rangeText(sub, C.bookOf(sub, link.stage), link.from, link.to)} — 체크하면 진도에 반영돼요</p>`
+        : html`<p class="hint">교재 이름과 범위를 함께 적으면 진도에 반영돼요. 예: ${example}</p>`}
+      ${nx && !text.trim()
+        ? html`<button type="button" class="pull hue" style=${hue(sub.h)} onClick=${pull}>
+            <span class="l"><small>${nx.task ? `${md(nx.task.date)}에 잡혀 있는 다음 것 · ${whenWord}로 당겨 오기` : `${whenWord} 이어서 하기`}</small><b>${nx.task ? `${titleOf(nx.task)} ${C.trng(nx.task)}` : `${nx.stage.name} ${C.rangeText(sub, nx.book, nx.from, nx.to, nx.units)}`}</b></span>
+            <${Icon} n="plus" s=${20} />
+          </button>`
+        : null}
       <span class="label">과목</span>
       <div class="chips">${subs.map((s) => html`<button type="button" key=${s.id} class="chip hue" style=${hue(s.h)} aria-pressed=${sid === s.id ? 'true' : 'false'} onClick=${() => setSid(s.id)}><span class="dot"></span>${s.name}</button>`)}</div>
       <span class="label">언제</span>
       <div class="chips">
         ${[[td, '오늘'], [addDays(td, 1), '내일'], [addDays(td, 2), '모레']].map(([d, l]) => html`<button type="button" key=${l} class="chip" aria-pressed=${when === d ? 'true' : 'false'} onClick=${() => setWhen(d)}>${l}</button>`)}
-        <input class="input" type="date" style="width:auto" value=${when} onChange=${(e) => e.target.value && setWhen(e.target.value)} aria-label="날짜" />
+        <${DateField} style="width:auto" value=${when} label="날짜" onCommit=${(v) => setWhen(v)} />
       </div>
       <div class="btns" style="margin-top:18px"><button class="btn pri" type="submit" disabled=${!text.trim()}>추가</button></div>
-      ${added.length ? html`<p class="hint">추가함: ${added.join(', ')}</p>` : null}
+      ${added.length ? html`<p class="hint">넣음: ${added.join(', ')}</p>` : null}
     </form>
   <//>`;
 }
@@ -589,7 +678,9 @@ export function CalendarSheet({ pickFor, back, inline }) {
   const [month, setMonth] = useState(() => (UI().day || td).slice(0, 7));
   const [y, m] = month.split('-').map(Number);
   const first = `${month}-01`;
-  const start = addDays(first, -C.weekday(first));
+  const ws = PR().weekStart === 1 ? 1 : 0; // 달력 첫 요일 (설정)
+  const start = addDays(first, -((C.weekday(first) - ws + 7) % 7));
+  const heads = [0, 1, 2, 3, 4, 5, 6].map((i) => (i + ws) % 7);
   const cells = Array.from({ length: 42 }, (_, i) => addDays(start, i));
   const weeks = cells.slice(35).every((d) => d.slice(0, 7) !== month) ? cells.slice(0, 35) : cells;
   const shift = (n) => {
@@ -614,7 +705,7 @@ export function CalendarSheet({ pickFor, back, inline }) {
       <button class="ib" aria-label="다음 달" onClick=${() => shift(1)}><${Icon} n="right" /></button>
     </div>
     <div class="cal appear" key=${month}>
-      ${C.WD.map((w, i) => html`<div key=${w} class=${'wd' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>${w}</div>`)}
+      ${heads.map((i) => html`<div key=${i} class=${'wd' + (i === 0 ? ' sun' : i === 6 ? ' sat' : '')}>${C.WD[i]}</div>`)}
       ${weeks.map((d) => {
         const l = tasksOn(d).filter((t) => t.status !== 'dropped');
         const wd = C.weekday(d);
@@ -645,7 +736,7 @@ export function WeekSheet() {
   const mx = Math.max(1, ...w.days.map((d) => d.pages));
   const reasons = Object.entries(w.reasons).sort((a, b) => b[1] - a[1]);
   const rmx = Math.max(1, ...reasons.map((r) => r[1]));
-  const sum = C.mix(D().subjects.map((s) => [s, w.days.reduce((a, d) => a + ((s.log || {})[d.d] || 0), 0)]));
+  const sum = C.tally(D().subjects.flatMap((s) => w.days.flatMap((d) => Object.entries(C.logTally(s, d.d)))));
   const tm = w.time;
   const hasOlder = D().tasks.some((t) => t.date < addDays(end, -6));
   const many = w.days.length > 7;
@@ -665,7 +756,7 @@ export function WeekSheet() {
       <div class="fact"><div class="k">미룬 횟수</div><div class="v">${w.moved}<small>번</small></div></div>
       <div class="fact"><div class="k">안 하기로 한 일</div><div class="v">${w.dropped}<small>개</small></div></div>
     </div>
-    <div class="sec-title">날마다 한 양<em>합계 ${sum.text}</em></div>
+    <div class="sec-title">날마다 한 양<em>합계 ${C.tallyText(sum)}</em></div>
     <div class=${'vbars' + (many ? ' many' : '')}>${w.days.map((d) => html`<div key=${d.d} title=${`${md(d.d)} ${d.pages}`}><i class=${d.pages ? '' : 'zero'} style=${{ height: `${Math.max(3, (d.pages / mx) * 100)}%` }}></i></div>`)}</div>
     <div class="vbars-x">${many
       ? html`<span>${md(w.days[0].d)}</span><span>${md(w.days[w.days.length - 1].d)}</span>`
@@ -713,14 +804,19 @@ export function PlanSheet({ only }) {
   const stays = (t) => t.status === 'todo' && !(t.kind === 'track' && !t.manual && !t.hist && (!only || t.subjectId === only));
   // 2주보다 먼 날의 반복하는 일은 아직 할 일로 안 만들어져 있으니 따로 더한다
   const dayMin = (d, l) => C.plannedMinutes(l) + C.plannedMinutes(D().tasks.filter((t) => t.date === d && stays(t))) + C.pendingRepeatMinutes(d);
-  const total = C.mix(tasks.map((t) => [subById(t.subjectId), taskPages(t)]));
+  const total = C.taskTally(tasks);
+  const tu = C.UNITS.filter((u) => total[u.id]);
   const p = PR();
   const E = C.endWord();
   const n = days.length || 1;
   const needMin = byDay.reduce((a, [d, l]) => a + dayMin(d, l), 0);
   const capMin = byDay.reduce((a, [d]) => a + C.capacity(d), 0);
-  // 쪽과 지문이 섞이면 큰 숫자는 쪽, 지문은 작게 덧붙인다
-  const big = (x, y) => html`<b class="num">${total.p || !total.q ? x : y}</b>${total.p || !total.q ? '쪽' : '지문'}${total.p && total.q ? html`<small>+ ${y}지문</small>` : null}`;
+  // 단위가 섞이면 큰 숫자는 첫 단위, 나머지는 작게 덧붙인다
+  const big = (f) => {
+    if (!tu.length) return html`<b class="num">0</b>`;
+    const [u0, ...us] = tu;
+    return html`<b class="num">${f(total[u0.id])}</b>${C.unitShort(u0.id)}${us.length ? html`<small>+ ${us.map((u) => C.amountText(u.id, f(total[u.id]), true)).join(' · ')}</small>` : null}`;
+  };
   return html`<${Sheet}
     title=${only ? `${subById(only).name}만 다시 나누기` : `${E}까지 나눠 주기`}
     tall
@@ -731,9 +827,9 @@ export function PlanSheet({ only }) {
   >
     ${!ex ? html`<p class="muted">시험이나 끝낼 날이 없어요. 오늘 화면 › … › 다음 시험 정하기에서 넣어 주세요.</p>` : null}
     <div class="plan-sum">
-      <div><small>남은 분량</small>${big(total.p, total.q)}</div>
+      <div><small>남은 분량</small>${big((x) => x)}</div>
       <div><small>나눌 날</small><b class="num">${days.length}</b>일</div>
-      <div><small>하루 평균</small>${big(Math.round(total.p / n), Math.round(total.q / n))}</div>
+      <div><small>하루 평균</small>${big((x) => Math.round(x / n))}</div>
     </div>
     ${ex && tasks.length
       ? html`<div class="kv" style="margin-bottom:6px"><span class="k">예상 시간 합</span><span class="v"><b class="num">${minutes(needMin)}</b> <span class="muted">/ 공부 가능 시간 합 ${minutes(capMin)}</span></span></div>`
@@ -751,7 +847,7 @@ export function PlanSheet({ only }) {
       return html`<div class=${'dayplan' + (cap ? '' : ' off')} key=${d}>
       <div class="dh">${mdws(d)}
         <button class=${'dtime' + (cap && m > cap ? ' over' : '') + (C.isDayChanged(d) ? ' changed' : '')} onClick=${() => setEdit(edit === d ? null : d)} aria-expanded=${edit === d ? 'true' : 'false'}>${cap ? `${minutes(m)} / ${minutes(cap)}` : '쉼'}</button>
-        <span class="num">${l.length ? C.mix(l.map((t) => [subById(t.subjectId), taskPages(t)])).text : ''}</span>
+        <span class="num">${l.length ? C.tallyText(C.taskTally(l)) : ''}</span>
       </div>
       ${edit === d ? html`<${DayCap} day=${d} compact />` : null}
       <ul>${l.map((t) => {

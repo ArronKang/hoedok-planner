@@ -1,9 +1,11 @@
 // 처음 설정: 시험 → 과목 → 교재 → 시작. 공부 순서는 묻지 않고 기본값(개념→문제→개념→심화)으로.
 import { html } from '../lib/html.js';
-import { useState } from '../lib/ui.js';
+import { useState, useStore } from '../lib/ui.js';
 import * as C from './core.js';
-import { hue } from './kit.js';
+import { hue, DateField } from './kit.js';
 import { BookEditor } from './progress.js';
+import { syncState } from '../sync/state.js';
+import { installable, openInstall, platform } from './pwa.js';
 
 const { D, UI, setUI, commit, today, addDays, diffDays, mdws } = C;
 
@@ -30,8 +32,13 @@ export function Onboarding() {
   const data = D();
   const [picked, setPicked] = useState(() => new Set(data.subjects.length ? data.subjects.map((s) => s.name) : ['공통국어', '공통수학', '공통영어', '한국사', '통합사회', '통합과학']));
   const [custom, setCustom] = useState('');
+  const sync = useStore(syncState);
 
   if (step === 0) {
+    const me = platform();
+    const install = installable() && me !== 'desktop';
+    // 로그인한 상태면 예시는 숨긴다 (예시가 계정에 섞일 길을 아예 없앰)
+    const signed = !!sync.user;
     return html`<div class="ob"><div class="ob-hello">
       <div class="ob-demo hue" style=${hue(14)}>
         <div class="row"><span class="dot"></span><b>통합사회</b><span class="num" style="margin-left:auto;color:var(--sc);font-size:1.3em">47%</span></div>
@@ -44,8 +51,16 @@ export function Onboarding() {
         commit();
         go(1);
       }}>시작하기</button>
-      <button class="btn ghost block" style="margin-top:8px" onClick=${() => C.loadDemo()}>예시로 먼저 둘러보기</button>
-      <button class="btn ghost block" style="margin-top:2px" onClick=${() => C.openSheet({ type: 'settings', page: 'account' })}>다른 기기에서 쓰던 기록이 있어요</button>
+      ${signed
+        ? html`<p class="ob-signed">로그인됨 · ${sync.user.email}${sync.first ? html`<br />계정 기록을 받아 오는 중…` : ''}</p>`
+        : html`<button class="btn ghost block" style="margin-top:8px" onClick=${() => C.loadDemo()}>예시로 먼저 둘러보기</button>
+            <button class="btn ghost block" style="margin-top:2px" onClick=${() => C.openSheet({ type: 'settings', page: 'account', from: 'ob' })}>다른 기기에서 쓰던 기록이 있어요</button>`}
+      ${install
+        ? html`<div class="ob-install">
+            ${me === 'ios' ? html`<p>아이폰은 먼저 <b>홈 화면에 추가</b>하고, 그 아이콘으로 열어서 시작하세요. Safari와 아이콘 앱은 기록이 따로예요.</p>` : html`<p>홈 화면에 추가하면 아이콘을 눌러 앱처럼 열려요.</p>`}
+            <button class="link" onClick=${openInstall}>홈 화면에 추가하는 법</button>
+          </div>`
+        : null}
     </div></div>`;
   }
 
@@ -79,11 +94,9 @@ export function Onboarding() {
             }} aria-label="기간 이름" />`
         : null}
       <span class="label">${goal ? '끝낼 날' : '시험 첫날'}</span>
-      <input class="input" type="date" style="max-width:220px" value=${ex.date} onChange=${(e) => {
-        if (e.target.value > today()) {
-          ex.date = e.target.value;
-          commit();
-        }
+      <${DateField} style="max-width:220px" value=${ex.date} min=${addDays(today(), 1)} why="오늘 뒤의 날짜를 골라 주세요" label=${goal ? '끝낼 날' : '시험 첫날'} onCommit=${(v) => {
+        ex.date = v;
+        commit();
       }} />
       <p class="hint">${mdws(ex.date)} · ${diffDays(today(), ex.date)}일 남았어요</p>
       ${goal ? html`<p class="hint">방학이나 평소처럼 시험이 없을 때예요. 그날까지 나눠 드리고, 성적 비교만 없어요.</p>` : null}
@@ -108,7 +121,7 @@ export function Onboarding() {
         for (const s of keep) {
           if (!s.books.length) {
             const pre = C.SUBJECT_PRESETS.find((p) => p.name === s.name);
-            if (pre) s.books = pre.books.slice(0, 2).map((b) => C.newBook(b));
+            if (pre) s.books = pre.books.slice(0, 2).map((b) => C.presetBook(s.name, b));
           }
         }
         commit();
@@ -133,16 +146,16 @@ export function Onboarding() {
     return html`<${Card}
       step="3 / 3"
       title="과목마다 쓰는 교재"
-      desc=${`자주 쓰는 교재를 미리 넣어 두었어요. ${C.isGoal(data.exam) ? '공부할' : '시험 범위'} 쪽수만 맞추고, 안 쓰는 건 빼 주세요.`}
+      desc=${`${C.isGoal(data.exam) ? '공부할' : '시험'} 범위만 맞추고, 안 쓰는 건 빼 주세요. 지문·문제·단원(1-1, 1-2…)으로 세는 교재는 '쪽'을 눌러 바꿔요.`}
       foot=${html`<button class="btn" onClick=${() => go(2)}>이전</button><span class="sp"></span><button class="btn pri" onClick=${() => {
-        for (const s of data.subjects) if (s.books.length && !s.stages.length) s.stages = C.buildStages(s.books, 'mine', C.isPsg(s));
+        for (const s of data.subjects) if (s.books.length && !s.stages.length) s.stages = C.stagesFor(s, 'mine');
         commit();
         go(4);
       }}>다음</button>`}
     >
       ${data.subjects.map((s) => html`<div class="bookcard hue" key=${s.id} style=${hue(s.h)}>
         <div class="hd"><span class="dot"></span>${s.name}<small>${s.books.length ? `${s.books.length}권` : '나중에 넣어도 돼요'}</small></div>
-        <${BookEditor} sub=${s} compact />
+        <${BookEditor} sub=${s} compact back=${null} />
       </div>`)}
     <//>`;
   }
@@ -150,9 +163,11 @@ export function Onboarding() {
   // step 4: 시작
   const ready = data.subjects.filter((s) => s.stages.length);
   const { tasks, days } = C.previewPlan(today());
-  const total = tasks.reduce((a, t) => a + (t.to - t.from + 1), 0);
+  const total = C.taskTally(tasks);
+  const tu = C.UNITS.filter((u) => total[u.id]);
+  const mins = tasks.reduce((a, t) => a + C.taskMinutes(t), 0);
   const finish = (plan) => {
-    for (const s of data.subjects) if (s.books.length && !s.stages.length) s.stages = C.buildStages(s.books, 'mine', C.isPsg(s));
+    for (const s of data.subjects) if (s.books.length && !s.stages.length) s.stages = C.stagesFor(s, 'mine');
     if (plan) C.planAll(today());
     data.onboarded = true;
     commit();
@@ -165,11 +180,11 @@ export function Onboarding() {
     foot=${html`<button class="btn" onClick=${() => go(3)}>이전</button><span class="sp"></span><button class="btn" onClick=${() => finish(false)}>나누지 않고 시작</button><button class="btn pri" disabled=${!tasks.length} onClick=${() => finish(true)}>나눠서 시작</button>`}
   >
     <div class="plan-sum">
-      <div><small>전체 분량</small><b class="num">${total}</b>쪽</div>
+      <div><small>전체 분량</small><b class="num">${tu.length ? total[tu[0].id] : 0}</b>${tu.length ? C.unitShort(tu[0].id) : '쪽'}${tu.length > 1 ? html`<small>+ ${tu.slice(1).map((u) => C.amountText(u.id, total[u.id], true)).join(' · ')}</small>` : null}</div>
       <div><small>나눌 날</small><b class="num">${days.length}</b>일</div>
-      <div><small>하루 평균</small><b class="num">${days.length ? Math.round(total / days.length) : 0}</b>쪽</div>
+      <div><small>하루 예상</small><b class="num">${days.length ? C.minutes(Math.round(mins / days.length / 5) * 5) : '–'}</b></div>
     </div>
-    ${data.subjects.map((s) => html`<div class="kv hue" key=${s.id} style=${hue(s.h)}><span class="k row"><span class="dot"></span>${s.name}</span><span class="v">${s.stages.length ? `${s.stages.length}단계 · ${C.tot(s)}쪽` : html`<span class="muted">교재 없음 — 나중에</span>`}</span></div>`)}
+    ${data.subjects.map((s) => html`<div class="kv hue" key=${s.id} style=${hue(s.h)}><span class="k row"><span class="dot"></span>${s.name}</span><span class="v">${s.stages.length ? `${s.stages.length}단계 · ${C.tallyText(C.totU(s))}` : html`<span class="muted">교재 없음 — 나중에</span>`}</span></div>`)}
     <p class="hint">공부 순서는 <b>개념 → 문제 → 개념 → 심화</b>로 시작해요. 과목마다 나중에 바꿀 수 있어요.</p>
   <//>`;
 }
