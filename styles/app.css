@@ -1456,3 +1456,37 @@ button.link { background: none; border: 0; padding: 0; font: inherit; font-weigh
 /* 처음 화면 마지막: 시간 값(2시간 40분)은 좁으면 두 줄로 */
 .ob .plan-sum { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .ob .plan-sum b { white-space: normal; font-size: 1.35em; line-height: 1.2; display: block; }
+
+/* ═══════════ 베타 2.1: 이 앱만의 아래 막대 — 고른 탭 칸이 '진도 칸'처럼 채워진다 ═══════════
+   애플 유리 방울을 따라 하지 않는다. 막대는 단정한 반투명 판, 고른 탭은 강조 색으로 옅게 채운 칸 + 아래 짧은 채움 줄.
+   칸은 용수철로 미끄러지고(motion.js slide), 막대를 밀면 손가락을 따라온다. */
+.tabbar.glass {
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--surf) 88%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: 0 0 0 1px var(--line), 0 12px 28px -14px rgba(0, 0, 0, .28);
+}
+.device[data-mode='dark'] .tabbar.glass { background: color-mix(in srgb, var(--surf) 88%, transparent); box-shadow: 0 0 0 1px var(--line), 0 12px 28px -14px rgba(0, 0, 0, .7); }
+.tabbar.glass::before, .device[data-mode='dark'] .tabbar.glass::before { display: none; }
+.lens, .dock.bare .lens { top: 5px; bottom: 5px; border-radius: 16px; background: var(--accent-soft); box-shadow: none; transform-origin: center; }
+.device[data-mode='dark'] .lens { background: var(--accent-soft); box-shadow: none; }
+.lens::after { content: ''; position: absolute; left: 30%; right: 30%; bottom: 4px; height: 3px; border-radius: 3px; background: var(--accent); }
+.dock.bare .lens::after { bottom: 3px; }
+.lens-glass { display: none; }
+.tabbar.glass button { color: var(--ink-3); border-radius: 16px; }
+.tabbar.glass button[aria-current='page'] { color: var(--accent); }
+.tabbar.glass button:focus:not(:focus-visible) { outline: none; }
+.tabbar.glass button:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px; }
+.dock-add, .device[data-mode='dark'] .dock-add {
+  border-radius: 20px; background: var(--accent); color: var(--on-accent);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--accent) 75%, #000);
+}
+/* 위쪽 단추·D-day: 둥근 유리 원 대신 단정한 둥근 네모 판 */
+.device[data-bar='glass'] .head .ib, .device[data-bar='glass'] .sp-head .ib, .device[data-bar='glass'][data-mode='dark'] .head .ib, .device[data-bar='glass'][data-mode='dark'] .sp-head .ib {
+  width: 40px; height: 40px; border-radius: 12px; color: var(--ink-2);
+  background: var(--surf); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 0 0 1px var(--line);
+}
+.device[data-bar='glass'] .dday-chip, .device[data-bar='glass'][data-mode='dark'] .dday-chip { border-radius: 12px; background: var(--surf); box-shadow: 0 0 0 1px var(--line); }
+.device[data-bar='glass'] .sp-head .back, .device[data-bar='glass'][data-mode='dark'] .sp-head .back { border-radius: 12px; background: var(--surf); box-shadow: 0 0 0 1px var(--line); }
+.device[data-bar='glass'] .sheet { border-radius: 24px 24px 0 0; }

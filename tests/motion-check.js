@@ -289,22 +289,22 @@ async function runInner(level, quiet) {
       let x = nr.left + 4 + w / 2;
       pe(first, 'pointerdown', x);
       for (let i = 0; i < 10; i++) pe(nav, 'pointermove', (x += w * 0.2));
-      const bub = nav.querySelector('.lens-glass');
-      check('R1 밀면 방울이 손가락을 따라옴', bub && bub.style.opacity === '1' && /translateX\(\d/.test(bub.style.transform));
+      const bub = nav.querySelector('.lens');
+      check('R1 밀면 채움 칸이 손가락을 따라옴', bub && /translateX\(\d/.test(bub.style.transform));
       for (let i = 0; i < 12; i++) pe(nav, 'pointermove', (x += w * 0.3)); // 설정 칸 너머까지
       pe(nav, 'pointerup', x);
       first.click(); // 손가락을 뗀 자리의 누름이 따라와도 한 번 삼킨다
       await settle();
       check('R2 놓으면 가까운 탭이 열리고, 설정 칸까지 밀어도 설정 창은 안 열림', C.UI().tab === 'grades' && !C.UI().sheet, C.UI().tab);
       await idle('R 밀기');
-      check('R3 다 끝나면 손가락 자리 모양을 걷어 냄', bub && !bub.getAttribute('style'));
+      check('R3 다 끝나면 손가락 자리 모양을 걷어 냄', bub && !bub.style.transform);
       // 세로로 움직이면 밀기가 아님
       pe(first, 'pointerdown', nr.left + 4 + w / 2);
       pe(nav, 'pointermove', nr.left + 4 + w / 2 + 3, y - 30);
       pe(nav, 'pointermove', nr.left + 4 + w * 2, y - 60);
       pe(nav, 'pointerup', nr.left + 4 + w * 2, y - 60);
       await settle();
-      check('R4 세로로 움직이면 밀기가 아님', C.UI().tab === 'grades' && (!bub || bub.style.opacity !== '1'));
+      check('R4 세로로 움직이면 밀기가 아님', C.UI().tab === 'grades' && (!bub || !bub.style.transform));
       C.go('today');
       await idle('R 정리');
     }

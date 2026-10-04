@@ -10,7 +10,6 @@ import { initSync, needsAttention } from '../sync/sync.js';
 import { PREVIEW, ns, previewLabel } from '../env.js';
 import { syncState } from '../sync/state.js';
 import { ensureFont } from './fonts.js';
-import { fitGlass } from './glass.js';
 import { Icon, Toast, hue, StageBar, useCross, Sheet, glassBar } from './kit.js';
 import { TodayScreen, TodayMenu, TaskSheet, AddSheet, EndDaySheet, CalendarSheet, WeekSheet, PlanSheet, PhotoSheet, DueSheet, RepeatsSheet } from './today.js';
 import { ProgressList, SubjectPage, RecordSheet, SubjectMenu, ProgressMenu, ColorSheet, SetupSheet, RoutineSheet, EditSheet, AddSubjectSheet, LabelsSheet } from './progress.js';
@@ -130,7 +129,7 @@ function addTask() {
  * - 손가락을 뗀 뒤 따라오는 '누름'(click)은 한 번 삼킨다 (같은 동작이 두 번 되지 않게). 키보드로 누르는 것은 그대로.
  * 돌려주는 ref: 탭을 바꿨을 때 방울이 출발할 자리 (Dock이 다시 그린 뒤 읽는다).
  */
-function useTabSlide(nav, lens, bubble, idx) {
+function useTabSlide(nav, lens, idx) {
   const landed = useRef(null);
   const cur = useRef(idx);
   cur.current = idx;
@@ -160,9 +159,10 @@ function useTabSlide(nav, lens, bubble, idx) {
       const { w } = geo();
       const tx = txAt(x);
       const str = Math.min(0.12, ((Math.abs(v) * 1000) / w) * 0.01); // 빨리 밀수록 조금 늘어남
-      for (const b of [lens.current, bubble.current]) if (b && b.getAnimations) for (const a of b.getAnimations()) a.cancel();
-      if (bubble.current) Object.assign(bubble.current.style, { opacity: '1', transform: `translateX(${tx.toFixed(1)}px) scale(${(M.LIFT.sx + str).toFixed(3)}, ${(M.LIFT.sy - str * 0.5).toFixed(3)})` });
-      if (lens.current) Object.assign(lens.current.style, { opacity: '0', transform: `translateX(${tx.toFixed(1)}px)` });
+      const b = lens.current;
+      if (!b) return;
+      if (b.getAnimations) for (const a of b.getAnimations()) a.cancel();
+      b.style.transform = `translateX(${tx.toFixed(1)}px) scaleX(${(1 + str).toFixed(3)})`;
     };
     const down = (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -175,7 +175,7 @@ function useTabSlide(nav, lens, bubble, idx) {
         /* 무시 */
       }
       // 누르는 순간 떠오른다 (지금 탭 자리에서 손가락 밑으로)
-      M.glide(lens.current, bubble.current, 0, false, true, txAt(e.clientX));
+      M.slide(lens.current, 0, txAt(e.clientX), true);
     };
     const move = (e) => {
       if (!s || s.id !== e.pointerId) return;
@@ -184,7 +184,7 @@ function useTabSlide(nav, lens, bubble, idx) {
         if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 1.5) {
           // 세로로 움직이면 누르기 취소 → 제자리로 내려앉음
           s = null;
-          M.glide(lens.current, bubble.current, M.currentX(bubble.current), true);
+          M.slide(lens.current, M.currentX(lens.current), 0);
           return;
         }
         if (Math.abs(dx) < 7) return;
@@ -202,7 +202,7 @@ function useTabSlide(nav, lens, bubble, idx) {
       if (!st || st.id !== e.pointerId) return;
       swallow = e.timeStamp;
       const { w } = geo();
-      const now = M.currentX(bubble.current) || txAt(st.x);
+      const now = M.currentX(lens.current);
       let k;
       if (cancel) k = cur.current;
       else if (!st.on) k = TABS.findIndex(([id]) => id === st.tab); // 누르기만: 누른 탭
@@ -215,7 +215,7 @@ function useTabSlide(nav, lens, bubble, idx) {
         landed.current = { from };
         tapTab(TABS[k][0]);
       } else {
-        M.glide(lens.current, bubble.current, from, true);
+        M.slide(lens.current, from, 0);
         if (!cancel && !st.on) tapTab(TABS[k][0]); // 지금 탭을 다시 누름: 처음 화면 → 맨 위로
       }
     };
@@ -252,34 +252,23 @@ function Dock({ tab }) {
   const p = PR();
   const nav = useRef(null);
   const lens = useRef(null);
-  const bubble = useRef(null);
   const idx = TABS.findIndex(([id]) => id === tab);
   const lastIdx = useRef(idx);
-  const landed = useTabSlide(nav, lens, bubble, idx);
-  // 크롬 계열은 막대 크기에 맞춘 굴절 필터 (glass.js)
-  useEffect(() => {
-    const d = nav.current && nav.current.parentElement;
-    if (!d) return;
-    fitGlass(d);
-    if (typeof ResizeObserver !== 'function') return;
-    const ro = new ResizeObserver(() => fitGlass(d));
-    ro.observe(d);
-    return () => ro.disconnect();
-  }, []);
+  const landed = useTabSlide(nav, lens, idx);
   useLayoutEffect(() => {
     const from = lastIdx.current;
     lastIdx.current = idx;
     const l = landed.current;
     landed.current = null;
     if (idx < 0 || !lens.current) return;
-    if (l) return M.glide(lens.current, bubble.current, l.from, true); // 손가락을 놓은 자리에서 내려앉는다
+    if (l) return M.slide(lens.current, l.from, 0); // 손가락을 놓은 자리에서 미끄러져 들어간다
     if (from === idx || from < 0) return;
-    M.glide(lens.current, bubble.current, (from - idx) * bubble.current.offsetWidth);
+    M.slide(lens.current, (from - idx) * lens.current.offsetWidth, 0);
   }, [idx]);
   const labels = p.tabLabels !== false;
   return html`<div class=${'dock' + (labels ? '' : ' bare')}>
     <nav class="tabbar glass" ref=${nav} aria-label="주요 화면" style=${{ '--n': TABS.length + 1, '--i': Math.max(0, idx) }}>
-      ${idx >= 0 ? html`<i class="lens" ref=${lens} aria-hidden="true"></i><i class="lens-glass" ref=${bubble} aria-hidden="true"></i>` : null}
+      ${idx >= 0 ? html`<i class="lens" ref=${lens} aria-hidden="true"></i>` : null}
       ${TABS.map(([id, label, icon]) => html`<button key=${id} data-tab=${id} aria-current=${tab === id ? 'page' : 'false'} aria-label=${labels ? undefined : label} onClick=${() => tapTab(id)}><span class="ic"><${Icon} n=${icon} s=${24} /></span>${labels ? html`<span class="lb">${label}</span>` : null}</button>`)}
       <button key="set" aria-label=${labels ? undefined : '설정'} onClick=${() => C.openSheet({ type: 'settings' })}><span class="ic"><${Icon} n="gear" s=${24} /><${SettingsDot} /></span>${labels ? html`<span class="lb">설정</span>` : null}</button>
     </nav>
