@@ -3,7 +3,7 @@
 // - 글꼴처럼 다른 주소에서 오는 파일은 처음 쓸 때 저장해 두고 뒤에서 새로 고친다.
 // - 서버(동기화) 요청은 건드리지 않는다.
 // 파일을 고치면 `python tools/bump_sw.py`로 VERSION을 새로 계산한다 (테스트가 확인함).
-const VERSION = '663f34a3c540';
+const VERSION = 'd0a8acce469f';
 const APP = 'hoedok-app-' + VERSION;
 const RUNTIME = 'hoedok-runtime';
 const FILES = [
@@ -16,6 +16,10 @@ const FILES = [
   'icons/icon-512.png',
   'icons/maskable-512.png',
   'icons/apple-touch-icon.png',
+  'icons/start-1179x2556.png',
+  'icons/start-1206x2622.png',
+  'icons/start-1260x2736.png',
+  'icons/start-1320x2868.png',
   'src/app/main.js',
   'src/app/core.js',
   'src/app/store.js',

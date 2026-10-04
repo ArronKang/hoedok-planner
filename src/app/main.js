@@ -121,6 +121,100 @@ function addTask() {
   C.openSheet({ type: 'add', subjectId: UI().tab === 'progress' && t ? t.id : null });
 }
 
+/**
+ * 유리 막대 밀기 (아이폰 전화 앱처럼): 막대를 누른 채 옆으로 밀면 방울이 손가락을 따라오고,
+ * 놓으면 가까운 탭으로 내려앉으며 그 탭이 열린다. 누르기만 하면 지금처럼 그 탭(단추가 처리).
+ * 탭은 셋뿐이라 '설정' 칸 쪽으로 더 밀면 고무줄처럼 버틴다 (설정 창이 갑자기 열리지 않게).
+ * 돌려주는 ref: 밀어서 탭을 바꿨을 때 방울이 출발할 자리 (Phone이 다시 그린 뒤 읽는다).
+ */
+function useTabSlide(nav, lens, bubble, idx, glass) {
+  const landed = useRef(null);
+  const cur = useRef(idx);
+  cur.current = idx;
+  useEffect(() => {
+    const el = nav.current;
+    if (!el || !glass) return;
+    let s = null;
+    let swallow = 0; // 밀기가 끝난 직후의 '누름'은 한 번 삼킨다 (손가락을 뗀 자리의 단추가 또 눌리지 않게)
+    const geo = () => {
+      const r = el.getBoundingClientRect();
+      return { r, w: (r.width - 8) / (TABS.length + 1) };
+    };
+    // 손가락 자리 → 방울의 왼쪽 끝 (탭 칸 밖으로는 고무줄)
+    const leftAt = (x) => {
+      const { r, w } = geo();
+      const lo = 4, hi = 4 + (TABS.length - 1) * w;
+      let L = x - r.left - w / 2;
+      if (L < lo) L = lo - w * 0.35 * (1 - Math.exp(-(lo - L) / (w * 0.8)));
+      if (L > hi) L = hi + w * 0.35 * (1 - Math.exp(-(L - hi) / (w * 0.8)));
+      return { L, w };
+    };
+    const down = (e) => {
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+      s = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, x: e.clientX, t: e.timeStamp, v: 0 };
+    };
+    const move = (e) => {
+      if (!s || s.id !== e.pointerId) return;
+      if (!s.on) {
+        const dx = e.clientX - s.x0, dy = e.clientY - s.y0;
+        if (Math.abs(dx) < 7) return;
+        if (Math.abs(dy) > Math.abs(dx)) return (s = null);
+        s.on = true;
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* 무시 */
+        }
+        for (const b of [lens.current, bubble.current]) if (b && b.getAnimations) for (const a of b.getAnimations()) a.cancel();
+      }
+      const dt = Math.max(1, e.timeStamp - s.t);
+      s.v = s.v * 0.6 + ((e.clientX - s.x) / dt) * 0.4; // px/ms, 부드럽게
+      s.x = e.clientX;
+      s.t = e.timeStamp;
+      const { L, w } = leftAt(e.clientX);
+      const tx = L - (4 + cur.current * w);
+      const str = Math.min(0.12, ((Math.abs(s.v) * 1000) / w) * 0.01); // 빨리 밀수록 조금 늘어남
+      if (bubble.current) Object.assign(bubble.current.style, { opacity: '1', transform: `translateX(${tx.toFixed(1)}px) scale(${(1.16 + str).toFixed(3)}, ${(1.3 - str * 0.5).toFixed(3)})` });
+      if (lens.current) Object.assign(lens.current.style, { opacity: '0', transform: `translateX(${tx.toFixed(1)}px)` });
+    };
+    const up = (e, cancel = false) => {
+      const st = s;
+      s = null;
+      if (!st || !st.on || st.id !== e.pointerId) return;
+      swallow = e.timeStamp;
+      const { L, w } = leftAt(cancel ? -1e4 : e.clientX + st.v * 90); // 튕기듯 놓으면 그 방향으로 조금 더
+      const k = cancel ? cur.current : Math.max(0, Math.min(TABS.length - 1, Math.round((L - 4) / w)));
+      const from = leftAt(st.x).L - (4 + k * w); // 방울이 지금 있는 자리 (도착할 칸 기준)
+      if (k !== cur.current) {
+        landed.current = { from };
+        C.go(TABS[k][0]);
+      } else M.glide(lens.current, bubble.current, from, true);
+    };
+    const onUp = (e) => up(e);
+    const onCancel = (e) => up(e, true);
+    const click = (e) => {
+      if (swallow && e.timeStamp - swallow < 500) {
+        swallow = 0;
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onCancel);
+    el.addEventListener('click', click, true);
+    return () => {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onCancel);
+      el.removeEventListener('click', click, true);
+    };
+  }, [glass]);
+  return landed;
+}
+
 function Phone() {
   const ui = UI();
   const p = PR();
@@ -128,27 +222,26 @@ function Phone() {
   const t = C.top(tab);
   const back = () => C.pop(tab);
   const view = useRef(null);
+  const nav = useRef(null);
   const lens = useRef(null);
   const bubble = useRef(null);
   const glass = glassBar();
   useCross(view, `${tab}|${entryKey(t)}|${tab === 'today' ? C.viewDay() : ''}`, 4);
   const idx = TABS.findIndex(([id]) => id === tab);
   // 유리 막대 (아이폰 전화 앱처럼): 쉴 때는 고른 탭 뒤의 회색 알약.
-  // 탭을 바꾸면 알약이 막대보다 큰 투명 유리 방울로 떠올라 새 탭으로 미끄러지고, 다시 알약으로 내려앉는다.
+  // 탭을 바꾸면 알약이 막대보다 큰 투명 유리 방울로 떠올라 용수철처럼 새 탭으로 미끄러지고, 다시 알약으로 내려앉는다.
+  // 막대를 누른 채 옆으로 밀면 방울이 손가락을 따라온다 (useTabSlide).
   const lastIdx = useRef(idx);
+  const landed = useTabSlide(nav, lens, bubble, idx, glass);
   useLayoutEffect(() => {
     const from = lastIdx.current;
     lastIdx.current = idx;
-    if (!glass || from === idx || from < 0 || idx < 0 || !lens.current) return;
-    const d = (from - idx) * 100;
-    const ease = 'cubic-bezier(.32, .72, .2, 1)';
-    M.play(lens.current, [{ opacity: 1, transform: `translateX(${d}%)` }, { opacity: 0, transform: `translateX(${d}%)`, offset: 0.14 }, { opacity: 0, transform: 'translateX(0)', offset: 0.8 }, { opacity: 1, transform: 'translateX(0)' }], 560, 'linear');
-    M.play(bubble.current, [
-      { opacity: 0, transform: `translateX(${d}%) scale(1, 1)` },
-      { opacity: 1, transform: `translateX(${d}%) scale(1.16, 1.3)`, offset: 0.16 },
-      { opacity: 1, transform: 'translateX(0) scale(1.16, 1.3)', offset: 0.74 },
-      { opacity: 0, transform: 'translateX(0) scale(1, 1)' },
-    ], 560, ease);
+    const l = landed.current;
+    landed.current = null;
+    if (!glass || idx < 0 || !lens.current) return;
+    if (l) return M.glide(lens.current, bubble.current, l.from, true); // 손가락을 놓은 자리에서 내려앉는다
+    if (from === idx || from < 0) return;
+    M.glide(lens.current, bubble.current, (from - idx) * bubble.current.offsetWidth);
   }, [idx]);
   let main;
   if (tab === 'today') main = html`<${TodayScreen} />`;
@@ -163,7 +256,7 @@ function Phone() {
     return html`<div style="display:contents">
       <div class="view glass-view" ref=${view}>${main}</div>
       <div class=${'dock' + (labels ? '' : ' bare')}>
-        <nav class="tabbar glass" aria-label="주요 화면" style=${{ '--n': TABS.length + 1, '--i': Math.max(0, idx) }}>
+        <nav class="tabbar glass" ref=${nav} aria-label="주요 화면" style=${{ '--n': TABS.length + 1, '--i': Math.max(0, idx) }}>
           ${idx >= 0 ? html`<i class="lens" ref=${lens} aria-hidden="true"></i><i class="lens-glass" ref=${bubble} aria-hidden="true"></i>` : null}
           ${btns}
         </nav>
@@ -252,8 +345,12 @@ function useExits(sheetK, toastId) {
     if (root && !dragged) {
       // 창이 없어지면 배경까지, 다른 창으로 넘어가면 창만
       const close = !sheetK;
-      const g = close ? M.capture(root) : M.capture(root.querySelector('.sheet'), true);
-      if (g) out.current.push(() => M.sheetOut(g, close));
+      const box = root.querySelector('.sheet');
+      const g = close ? M.capture(root) : M.capture(box, true);
+      if (g) {
+        g.h = box ? box.offsetHeight : 0; // 휴대폰 창은 이 높이만큼 내려가며 사라진다
+        out.current.push(() => M.sheetOut(g, close));
+      }
     }
     M.setSheetSwap(!!(prev.sheet && sheetK) && !dragged);
   }

@@ -149,7 +149,7 @@ export function CycleSheet({ step: first }) {
     <${Steps} n=${idx} of=${total} />
     <p class="sub" style="margin:0 0 14px">${cur ? `남은 분량을 ${mdws(C.lastPlanDay(cur))}까지 날마다 나눠요.` : ''}</p>
     <div class="plan-sum">
-      <div><small>전체 분량</small><b class="num">${su.length ? sum[su[0].id] : 0}</b>${su.length ? C.unitShort(su[0].id) : '쪽'}${su.length > 1 ? html`<small>+ ${su.slice(1).map((u) => C.amountText(u.id, sum[u.id], true)).join(' · ')}</small>` : null}</div>
+      <div><small>전체 분량</small><b class="num">${su.length ? sum[su[0].id] : 0}</b>${su.length ? C.unitShort(su[0].id) : '쪽'}${su.length > 1 ? html`<small>+ ${su.slice(1).map((u) => C.amountText(u.id, sum[u.id])).join(' · ')}</small>` : null}</div>
       <div><small>나눌 날</small><b class="num">${days.length}</b>일</div>
       <div><small>과목</small><b class="num">${D().subjects.filter((s) => s.stages.length).length}</b>개</div>
     </div>

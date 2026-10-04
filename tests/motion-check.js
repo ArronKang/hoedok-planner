@@ -273,14 +273,109 @@ async function runInner(level, quiet) {
     before = snap();
     C.go('progress');
     await settle();
-    if (level !== 'off') check('O1 탭을 바꾸면 렌즈가 미끄러짐', fresh('.lens', before).length > 0);
-    else check('O3 끄기: 렌즈 움직임 없음', fresh('.lens', before).length === 0);
+    if (level !== 'off') {
+      const la = fresh('.lens', before);
+      check('O1 탭을 바꾸면 렌즈가 미끄러짐', la.length > 0);
+      // Q1: 같은 속도가 아니라 용수철 (키프레임을 촘촘히 계산해 넣는다 — 모양은 노드 테스트가 확인)
+      check('Q1 렌즈는 용수철로 (촘촘한 키프레임)', la.length > 0 && la.every((x) => x.effect.getKeyframes().length > 10));
+    } else check('O3 끄기: 렌즈 움직임 없음', fresh('.lens', before).length === 0);
     await idle('O 렌즈');
     C.go('today');
     await idle('O 정리');
+    // R: 막대를 누른 채 옆으로 밀기 (손가락 흉내)
+    const nav = document.querySelector('.tabbar.glass');
+    if (nav) {
+      const nr = nav.getBoundingClientRect();
+      const w = (nr.width - 8) / nav.querySelectorAll('button').length;
+      const y = nr.top + nr.height / 2;
+      const first = nav.querySelector('button');
+      const pe = (el, type, x, yy = y) => el.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 31, pointerType: 'touch', isPrimary: true, clientX: x, clientY: yy }));
+      let x = nr.left + 4 + w / 2;
+      pe(first, 'pointerdown', x);
+      for (let i = 0; i < 10; i++) pe(nav, 'pointermove', (x += w * 0.2));
+      const bub = nav.querySelector('.lens-glass');
+      check('R1 밀면 방울이 손가락을 따라옴', bub && bub.style.opacity === '1' && /translateX\(\d/.test(bub.style.transform));
+      for (let i = 0; i < 12; i++) pe(nav, 'pointermove', (x += w * 0.3)); // 설정 칸 너머까지
+      pe(nav, 'pointerup', x);
+      first.click(); // 손가락을 뗀 자리의 누름이 따라와도 한 번 삼킨다
+      await settle();
+      check('R2 놓으면 가까운 탭이 열리고, 설정 칸까지 밀어도 설정 창은 안 열림', C.UI().tab === 'grades' && !C.UI().sheet, C.UI().tab);
+      await idle('R 밀기');
+      check('R3 다 끝나면 손가락 자리 모양을 걷어 냄', bub && !bub.getAttribute('style'));
+      // 세로로 움직이면 밀기가 아님
+      pe(first, 'pointerdown', nr.left + 4 + w / 2);
+      pe(nav, 'pointermove', nr.left + 4 + w / 2 + 3, y - 30);
+      pe(nav, 'pointermove', nr.left + 4 + w * 2, y - 60);
+      pe(nav, 'pointerup', nr.left + 4 + w * 2, y - 60);
+      await settle();
+      check('R4 세로로 움직이면 밀기가 아님', C.UI().tab === 'grades' && (!bub || bub.style.opacity !== '1'));
+      C.go('today');
+      await idle('R 정리');
+    }
   }
   C.setPrefs({ tabStyle: keepBar });
   await settle();
+
+  // ── 베타 1.2: 창이 위로 튀지 않음(N9) · 창→창(C5) · 설정 쪽 넘기기(P4·P5) ──
+  // 앞에서 체크할 때 뜬 알림이 점검 도중에 시간이 다 되어 사라지면(복사본) 그것까지 세므로 먼저 치운다
+  C.setUI({ toast: null });
+  await idle('알림 정리');
+  if (level !== 'off') {
+    C.openSheet({ type: 'settings' });
+    await settle();
+    if (touch) {
+      const sc2 = document.querySelector('.sheet-layer .sheet-sc');
+      const box = sc2 && sc2.querySelector('.sheet');
+      const a = sc2 && sc2.getAnimations()[0];
+      check('N9 올라오는 움직임은 스크롤 상자째 (안의 창은 가만히)', !!a && box.getAnimations().length === 0);
+      if (a) {
+        const dur = a.effect.getComputedTiming().duration;
+        const tops = [];
+        for (const k of [0.1, 0.3, 0.5, 0.8]) {
+          a.currentTime = dur * k;
+          tops.push(box.getBoundingClientRect().top);
+        }
+        a.finish();
+        const fin = box.getBoundingClientRect().top;
+        check('N9 올라오는 동안 제자리보다 위로 가지 않음', tops.every((t) => t >= fin - 1) && Math.abs(sc2.scrollTop) <= 2, tops.map(Math.round).join(',') + ' → ' + Math.round(fin));
+      }
+    }
+    await shown();
+    const sb2 = document.querySelector('.sheet-layer .sheet-b');
+    sb2.scrollTop = 160;
+    const keepTop = sb2.scrollTop;
+    [...sb2.querySelectorAll('button')].find((b) => b.textContent.includes('화면 및 밝기')).click();
+    await settle();
+    const page = sb2.querySelector('.set-page');
+    const pb = document.querySelector('.m-page');
+    const solid = (e) => getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)';
+    check('P4 앞으로: 새 쪽이 옛 쪽 위에서 불투명하게 덮음 (글자 두 겹 없음)', !!pb && +getComputedStyle(page).zIndex > +getComputedStyle(pb).zIndex && solid(page) && getComputedStyle(page).opacity === '1');
+    check('P3 새 쪽은 맨 위부터', sb2.scrollTop === 0);
+    check('P2 복사본은 창 안에 가둠', !!pb && pb.parentNode === sb2.closest('.sheet') && getComputedStyle(pb).overflow === 'hidden');
+    await idle('P4 앞으로');
+    check('P4 끝나면 새 쪽에 붙인 모양을 걷어 냄', !page.getAttribute('style'));
+    sb2.querySelector('.set-page .back').click();
+    await settle();
+    const pb2 = document.querySelector('.m-page');
+    check('P4 뒤로: 지금 쪽(복사본)이 위에서 불투명하게 걷힘', !!pb2 && +getComputedStyle(pb2).zIndex > 2 && solid(pb2));
+    check('P5 뒤로 가면 보던 스크롤 자리', Math.abs(sb2.scrollTop - keepTop) <= 2, `${sb2.scrollTop} / ${keepTop}`);
+    await idle('P5 뒤로');
+    // C5 창→창: 앞 창은 반투명하게 겹치지 않는다
+    C.openSheet({ type: 'todayMenu' });
+    await shown();
+    C.openSheet({ type: 'week' });
+    await settle();
+    const og = document.querySelector('.m-ghost');
+    const fades = (el) => el.getAnimations().some((x) => x.effect.getKeyframes().some((k) => k.opacity != null && +k.opacity < 1));
+    if (C.UI().dev === 'phone') check('C5 창→창(휴대폰): 앞 창은 불투명한 채 내려가고 새 창이 올라옴', !!og && !fades(og) && anims('.sheet-layer').length > 0);
+    else {
+      const nb = document.querySelector('.sheet-layer .sheet');
+      const k = nb && nb.getAnimations()[0];
+      check('C5 창→창(태블릿): 앞 창이 지워진 뒤 새 창이 나타남', !!k && k.effect.getKeyframes().some((f) => f.offset > 0.3 && f.offset < 1 && +f.opacity === 0));
+    }
+    C.closeSheet();
+    await idle('C5 창→창');
+  }
 
   // ── 끄기(E1): 아무것도 움직이지 않음 ──
   if (level === 'off') {

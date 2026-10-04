@@ -76,8 +76,25 @@ def svg(safe=0.72, size=512):
     return "".join(parts)
 
 
+# 아이폰 홈 화면 앱의 시작 이미지 (apple-touch-startup-image): 없으면 아이폰이 하얀 화면을 먼저 보여 준다.
+# 시작 화면(index.html #splash)과 같은 종이색 한 장 → 이어서 시작 화면이 그려진다. (논리 크기 pt, 배율 3)
+STARTUP = [(393, 852), (402, 874), (420, 912), (440, 956)]  # 15·16 / 16 Pro·17·17 Pro / Air / 16·17 Pro Max
+
+
+def startup():
+    tags = []
+    for w, h in STARTUP:
+        name = f"start-{w * 3}x{h * 3}.png"
+        Image.new("RGB", (w * 3, h * 3), INK).save(os.path.join(OUT, name), optimize=True)
+        tags.append(f'<link rel="apple-touch-startup-image" media="(device-width: {w}px) and (device-height: {h}px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" href="icons/{name}" />')
+    return tags
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
+    if "--startup" in sys.argv:
+        print("\n".join(startup()))
+        sys.exit(0)
     if "--preview" in sys.argv:
         # 미리 보기: 주황(종이 디자인의 --flag) 바탕, 지금 단계 밑줄은 실제 앱의 초록
         BG, MARK = (184, 85, 43), (31, 92, 74)
