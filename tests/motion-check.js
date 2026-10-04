@@ -69,7 +69,7 @@ async function runInner(level, quiet) {
   C.setPrefs({ motion: level, motionView: true });
   await wait(300);
   const dev = document.getElementById('device');
-  check('E3 설정이 바로 적용', dev.dataset.motion === level);
+  check('E3 설정이 바로 적용', dev.dataset.motion === M.level() && M.level() === (level === 'off' ? 'off' : 'normal'));
 
   // ── 창 열기·닫기 ──
   const t = C.tasksOn(C.today()).find((x) => x.kind === 'free');
@@ -201,18 +201,14 @@ async function runInner(level, quiet) {
   await idle('M4 탭');
   C.toggleTask(todo.id); // 되돌림
 
-  // ── E4 화면 옮길 때만 끄기 ──
-  C.setPrefs({ motionView: false });
-  before = snap();
+  // ── E4 (베타 2.0): 움직임은 켜기/끄기만. 켜 두면 창도 화면 옮기기도 같은 규칙으로 움직인다 ──
   C.go('grades');
   await settle();
-  check('E4 화면 옮길 때 움직임만 꺼짐', fresh('.view', before).length === 0 && fresh('.pad-view', before).length === 0);
   C.go('today');
   C.openSheet({ type: 'calendar' });
   await settle();
-  if (level !== 'off') check('E4 창 움직임은 그대로', anims('.sheet-layer').length > 0);
+  if (level !== 'off') check('E4 창 움직임', anims('.sheet-layer').length > 0);
   C.closeSheet();
-  C.setPrefs({ motionView: true });
   await idle('E4');
 
   // ── I1·I2 뒤로 가기·Esc ──
@@ -344,20 +340,21 @@ async function runInner(level, quiet) {
     const sb2 = document.querySelector('.sheet-layer .sheet-b');
     sb2.scrollTop = 160;
     const keepTop = sb2.scrollTop;
-    [...sb2.querySelectorAll('button')].find((b) => b.textContent.includes('화면 및 밝기')).click();
+    [...sb2.querySelectorAll('button')].find((b) => b.textContent.includes('테마')).click();
     await settle();
-    const page = sb2.querySelector('.set-page');
-    const pb = document.querySelector('.m-page');
-    const solid = (e) => getComputedStyle(e).backgroundColor !== 'rgba(0, 0, 0, 0)';
-    check('P4 앞으로: 새 쪽이 옛 쪽 위에서 불투명하게 덮음 (글자 두 겹 없음)', !!pb && +getComputedStyle(page).zIndex > +getComputedStyle(pb).zIndex && solid(page) && getComputedStyle(page).opacity === '1');
+    // 움직임 규칙 ②: 옛 쪽(창 안쪽 칸 복사본)이 먼저 짧게 흐려지고, 새 쪽은 30%까지 보이지 않다가 들어온다 → 두 글자가 겹치지 않음
+    const og2 = document.querySelector('.m-view');
+    const oa = og2 && og2.querySelector('.set-page') && og2.querySelector('.set-page').getAnimations()[0];
+    const na = sb2.getAnimations()[0];
+    check('P4 옛 쪽은 먼저 짧게 흐려짐', !!oa && oa.effect.getComputedTiming().duration <= 140, oa ? String(oa.effect.getComputedTiming().duration) : '없음');
+    check('P4 새 쪽은 30%까지 투명 (겹치지 않음)', !!na && na.effect.getKeyframes().some((k) => Math.abs(k.offset - 0.3) < 0.01 && +k.opacity === 0));
+    check('P2 복사본은 창 안쪽 칸째 (창 밖으로 안 삐져나옴)', !!og2 && og2.classList.contains('sheet-b') && og2.parentNode === document.getElementById('device'));
     check('P3 새 쪽은 맨 위부터', sb2.scrollTop === 0);
-    check('P2 복사본은 창 안에 가둠', !!pb && pb.parentNode === sb2.closest('.sheet') && getComputedStyle(pb).overflow === 'hidden');
     await idle('P4 앞으로');
-    check('P4 끝나면 새 쪽에 붙인 모양을 걷어 냄', !page.getAttribute('style'));
     sb2.querySelector('.set-page .back').click();
     await settle();
-    const pb2 = document.querySelector('.m-page');
-    check('P4 뒤로: 지금 쪽(복사본)이 위에서 불투명하게 걷힘', !!pb2 && +getComputedStyle(pb2).zIndex > 2 && solid(pb2));
+    const na2 = sb2.getAnimations()[0];
+    check('P4 뒤로: 왼쪽에서 들어옴', !!na2 && /translateX\(-/.test(na2.effect.getKeyframes()[0].transform || ''));
     check('P5 뒤로 가면 보던 스크롤 자리', Math.abs(sb2.scrollTop - keepTop) <= 2, `${sb2.scrollTop} / ${keepTop}`);
     await idle('P5 뒤로');
     // C5 창→창: 앞 창은 반투명하게 겹치지 않는다
@@ -399,7 +396,7 @@ async function runInner(level, quiet) {
 /** 네 단계 모두 */
 export async function runAll() {
   const out = [];
-  for (const level of ['normal', 'slow', 'fast', 'off']) out.push(await run({ level, quiet: true }));
+  for (const level of ['normal', 'off']) out.push(await run({ level, quiet: true }));
   C.setPrefs({ motion: null });
   return out;
 }

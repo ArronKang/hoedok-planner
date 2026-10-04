@@ -2,7 +2,7 @@
 
 이 파일은 이 저장소에서 일하는 Claude가 **처음부터 끝까지 알아야 할 모든 것**을 적은 안내서다.
 대화가 새로 시작되어도 이 파일만 읽으면 이어서 일할 수 있어야 한다. 바뀐 것이 생기면 **이 파일도 함께 고친다**.
-마지막 정리: 2026-10-04 (베타 1.2 — 미리 보기에 올림, 실제 앱은 베타 1.1).
+마지막 정리: 2026-10-04 (베타 2.0 — 미리 보기에 올림, 실제 앱은 베타 1.1).
 
 ---
 
@@ -16,8 +16,8 @@
 | 기기 | **갤럭시 탭 S7 FE**(삼성 인터넷, 태블릿 화면) + **아이폰 17 Pro**(Safari, 홈 화면 앱). 개발 PC는 Windows 11 |
 | 저장 | 기기 안 IndexedDB(로컬 우선) + 로그인하면 **Supabase**로 두 기기 동기화 |
 | 배포 | GitHub `ArronKang/hoedok-planner` → GitHub Pages. 실제 앱 https://arronkang.github.io/hoedok-planner/ · 미리 보기 https://arronkang.github.io/hoedok-planner/preview/ |
-| 지금 버전 | **베타 1.2** (`src/app/settings.js`의 `APP_VERSION`), 브랜치 `beta`, **미리 보기에만 올림**. 실제 앱(main)은 베타 1.1 (a42c0a7, 2026-10-04 "올려 줘") |
-| 다음에 할 일 | 사용자가 미리 보기(베타 1.2)를 아이폰에서 써 보고 **"올려 줘"** 하면 `beta`를 main에 합친다 (§9-3). 피드백(녹화 영상 등)이 오면 장면마다 나눠 보고 고친다 (§11-5) |
+| 지금 버전 | **베타 2.0** (`src/app/settings.js`의 `APP_VERSION`), 브랜치 `beta`, **미리 보기에만 올림**. 실제 앱(main)은 베타 1.1 (a42c0a7) |
+| 다음에 할 일 | 사용자가 미리 보기(베타 2.0)를 기기에서 써 보고 **"올려 줘"** 하면 `beta`를 main에 합친다 (§9-3). 새 화면은 **[디자인-규칙](docs/디자인-규칙.md)·[움직임-규칙](docs/움직임-규칙.md)**을 따른다 |
 
 ---
 
@@ -41,7 +41,8 @@
 - **열품타 연동은 짐작하지 않는다** — 필요하면 사용자에게 묻는다.
 - 입력은 최소로: 한 번 누르기·밀기, 지우거나 옮긴 뒤에는 **되돌리기**.
 - 겉은 단순하게, 들어갈수록 깊게(GoodNotes처럼). 꾸미기는 **미리 설계한 선택지**에서만 → 무엇을 골라도 예쁘게. "AI가 만든 것 같은" 남색 다크 UI 피하기. 개발자만 아는 말 피하기.
-- 움직임은 알려 주려고만, 부드럽게, 끌 수 있게. 새 움직임은 `docs/움직임-버그-체크리스트.md`를 통과해야 한다.
+- 움직임은 알려 주려고만, 부드럽게, 끌 수 있게. **종류는 넷뿐**(창·다음으로·나타남·손에 붙는 것), 시간·곡선은 정해진 값만, 속도 설정 없음(켜기/끄기) — [docs/움직임-규칙.md](docs/움직임-규칙.md). 새 움직임은 `docs/움직임-버그-체크리스트.md`를 통과해야 한다.
+- **디자인 규칙**([docs/디자인-규칙.md](docs/디자인-규칙.md)): 간격 4의 배수, 글자 4단계(굵기·진하기로 위계), 강조 색 하나, 단추 3종(주 하나·보조·글자), 누르는 칸 44px+, 단추 글자는 동사 2~6글자, 반투명 두 겹 글자 금지. "끊기고 세련되지 않을 거면 아예 하지 마"(사용자).
 
 ### 1-3. 개인정보·보안
 - **사용자의 실제 성적은 저장소에 절대 넣지 않는다.** (실제 통합사회 점수 등 → 예시는 가짜 값 92.4/89.7/90.63 등으로)
@@ -101,6 +102,7 @@ python tools/make_icons.py             # 아이콘 PNG 다시 만들기
 | `styles/app.css` | 모든 화면 모양 (한 파일, 약 1,000줄+). 뒤쪽에 차수별 덧붙임 묶음(3차·4차·베타 1.0·베타 1.1·베타 1.2) — 같은 선택자를 나중 묶음이 덮어쓴다 |
 | `icons/start-*.png` | 아이폰 홈 화면 앱 **시작 이미지**(종이색 한 장, 아이폰 15·16·17·Air·Pro Max). 없으면 흰 화면이 먼저 보였다. `python tools/make_icons.py --startup`이 만들고 index.html에 넣을 태그를 찍어 준다 |
 | `src/app/` | 화면과 동작 (§4) |
+| `docs/디자인-규칙.md`, `docs/움직임-규칙.md` | 베타 2.0부터 모든 화면이 따르는 규칙 (읽은 글과 출처 포함) |
 | `src/lib/ui.js`, `html.js` | 가상 DOM·훅 런타임 / html 템플릿 태그 |
 | `src/core/` | `date.js`(날짜·논리적 오늘), `num.js`, `id.js`, `calc/naesin.js`(내신 계산) |
 | `src/data/` | `db.js`(메모리 + IndexedDB, 동기화 대기열·톰스톤), `idb.js`, `attachments.js`(사진) |
@@ -121,7 +123,7 @@ python tools/make_icons.py             # 아이콘 PNG 다시 만들기
 
 | 파일 | 하는 일 |
 |---|---|
-| `main.js` | 앱 틀. 휴대폰(한 화면 + 아래 탭) / 태블릿(왼쪽 막대 + 두 칸). 창(시트) 목록 `SHEETS`, 사라지는 움직임(`useExits`), 뒤로 가기(`initBack`), 시작(`boot`), 시작 화면 걷기(`hideSplash`), 주소창 색(`syncChrome`), 첫 동기화 알림 |
+| `main.js` | 앱 틀. 휴대폰(한 화면) / 태블릿·PC(두 칸) — **둘 다 같은 유리 막대 `Dock`**(아래 가운데, `useTabSlide`: 누르면 방울이 떠오르고 밀면 따라옴). 창(시트) 목록 `SHEETS`, 사라지는 움직임(`useExits`), 뒤로 가기(`initBack`), 시작(`boot`), 시작 화면 걷기(`hideSplash`), 주소창 색(`syncChrome`), 첫 동기화 알림 |
 | `core.js` | **상태·계산·동작 전부** (DOM·저장소 없이 돌아감 → 테스트 대상). 단위, 진도 %, 나누기(`planSubject`), 체크·일부만, 반복, 시험 정리, 예시 자료(`loadDemo`) |
 | `store.js` | core의 한 덩어리 자료 ↔ IndexedDB 레코드. 바뀐 레코드만 저장, 다른 기기 변경 반영(`onDb` → `reconcile`) |
 | `kit.js` | 공통 조각: `Icon`, `Check`, `StageBar`(진도 막대), `Seg`, `Switch`, `Stepper`, **`NumField`·`RangeField`·`DateField`**, **`Sheet`**, `Swipe`, `Toast`, `useCross`, `glassBar`, `buzz` |
@@ -132,7 +134,9 @@ python tools/make_icons.py             # 아이콘 PNG 다시 만들기
 | `cycle.js` | 시험이 끝난 뒤 흐름: 결과 적기 → 다음 시험 → 범위 → 시작 |
 | `settings.js` | 설정(애플 설정처럼), 백업, 정보. `APP_VERSION`·`APP_DATE` |
 | `account.js` | 계정·동기화 화면 (앱에 서버가 들어 있으면 이메일·비밀번호·로그인만) |
-| `onboarding.js` | 처음 설정: 시작 화면 → 시험 → 과목 → 교재 → 나눠서 시작 |
+| `onboarding.js` | 처음 설정(베타 2.0): 환영(Hero 그림) → 로그인(`AccountPage ob`) → 시험(카드) → 학년·학기 → 과목과 교과서(출판사·범위) → 시작. 단계 넘김은 가로 페이드 |
+| `curriculum.js` | 학년별 과목(2022 개정: 고1 공통과목 …1/…2, 고2·3 일반선택), 고1 출판사 목록·**확인한 목차만** 단원 이름(출처 `src`), 없으면 교육과정 큰 단원·'1단원…'. `recommend`, `publishers`, `units`, `scopeGuess`(중간=앞 절반·기말=뒤 절반), `makeSubject`(교과서=단원 칸 교재) |
+| `glass.js` | 크롬 계열(윈도우·삼성 인터넷)에서 유리 막대·방울이 뒤를 굴절하는 SVG 필터(`fitGlass`, 크기 바뀌면 다시). 사파리는 CSS만 |
 | `fonts.js` | 한글 글꼴 8개 (프리텐다드·기기 글꼴·본고딕·나눔고딕·고운돋움·함렛·고운바탕·개구), Google Fonts에서 필요할 때만 |
 | `pwa.js` | 서비스 워커 등록·새 버전 알림, 홈 화면에 추가, `platform()`(ios/samsung/android/desktop), 저장 공간 지키기 |
 | `photos.js` | 할 일 사진 (이 기기에만, 동기화 시 첨부) |
@@ -158,12 +162,13 @@ python tools/make_icons.py             # 아이콘 PNG 다시 만들기
 
 ### 5-1. 상태 `store`
 ```
-{ v, data: { onboarded, demo, exam, lastExam, subjects[], tasks[], pastExams[], semesters[], repeats[] },
+{ v, data: { onboarded, demo, exam, lastExam, school{grade, sem, pubs{과목: 출판사 id}}, subjects[], tasks[], pastExams[], semesters[], repeats[] },
   prefs: { …화면 설정(기기마다) + 공부 설정(기기끼리 공유) },
   ui: { tab, day, stacks{today,progress,grades}, sheet, ob, open{}, toast, dev('phone'|'pad'), lastSub } }
 ```
 - `DEVICE_PREFS`(이 기기 localStorage에만): theme, mode, size, font, density, hand, group, doneBottom, show, legend, lowest, recent, padAside, listWidth, motion, motionView, **accent, bold, tabStyle, tabLabels, startTab, lastTab, weekStart, clock, ddayStyle, pctStyle, rowEst, doneMode, haptic**.
 - `STUDY_PREFS`(meta 레코드로 동기화): avail(요일별 공부 가능 분), rest(쉬는 요일), dayStart(하루가 바뀌는 시각 0/2/4/6), pace(쪽당 분), dayMin(날짜별 바꾼 시간).
+- **`LOOK_PREFS`**(베타 2.0, meta 레코드의 `look`으로 계정 동기화): theme, mode, size, font, bold, motion, group, doneMode, show… — 태블릿 칸 배치·마지막 탭은 빼서 기기마다. `migratePrefs`: 예전 테마(paper→warm, crisp→ink, soft→base, 강조 색→가까운 테마)·속도(slow/fast→normal)·글꼴(→pretendard)을 읽을 때 바꿈. meta에는 `school`도.
 - `commit()` = 자료가 바뀌었다고 알림(v+1) → store.js가 저장. `withUndo(msg, fn)` = 바꾸기 전 통째 스냅샷 + 되돌리기 알림.
 - 오늘 = `logicalToday(dayStart)` (새벽 4시 전이면 어제).
 
@@ -210,7 +215,8 @@ repeat     = { id, subjectId, title, days[요일], start, skip[], est?, pri?, at
 ## 6. 화면·디자인 체계
 
 ### 6-1. 기기 틀
-- `.device` 속성: `phone|pad`, `data-theme`(paper 종이 / crisp 선명 / soft 부드러움), `data-mode`(light/dark), `data-size`(sm/md/lg/xl → --base 14/15/16.5/18px), `data-font`, `data-density`(compact/normal/relaxed), `data-hand`, `data-motion`, **`data-bar`(glass/classic)**, **`data-accent`**, **`data-bold`**.
+- **테마(베타 2.0)**: 모양은 하나, 색만 6가지 `data-theme` = base 기본 · warm 종이 · forest 숲 · ocean 바다 · lavender 라벤더 · ink 먹(각각 밝게·어둡게). 예전 paper/crisp/soft 규칙이 CSS에 남아 있지만 새 이름이라 걸리지 않음. 강조 색은 테마가 정함(`data-accent`는 늘 theme).
+- `.device` 속성: `phone|pad`, `data-theme`, `data-mode`(light/dark), `data-size`(sm/md/lg/xl → --base 14/15/16.5/18px), `data-font`, `data-density`(compact/normal/relaxed), `data-hand`, `data-motion`, **`data-bar`(glass/classic)**, **`data-accent`**, **`data-bold`**.
 - `detectDev`: 화면의 짧은 변 ≥ 600px → pad. 갤럭시 탭은 pad, 아이폰은 phone.
 - 디자인 토큰: --bg, --surf, --sunk, --line, --ink(-2,-3), --accent(-soft), --on-accent, --flag, --r, --sat/--lit(과목 색 채도·밝기), --num(숫자 글꼴: 종이 Newsreader / 선명 JetBrains Mono / 부드러움 Space Grotesk).
 - 과목 색은 **hue만 저장**(`HUES`), 채도·밝기는 디자인이 정함 → `.hue { --sc, --sc-soft, --sc-hl }`.
@@ -218,7 +224,8 @@ repeat     = { id, subjectId, title, days[요일], start, skip[], est?, pri?, at
 - 굵은 글씨: 본문 550, 굵은 글자 800, 숫자 650.
 
 ### 6-2. 아래 막대
-- **유리(아이폰 기본 리퀴드 글래스, 전화 앱처럼)** — `prefs.tabStyle`: auto(아이폰이면 유리) / glass / classic. `glassBar()`.
+- **(베타 2.0) 모든 기기에서 유리 막대 하나**(`glassBar()`는 늘 true, 기본 막대·탭 모양 설정 없앰). 태블릿·PC는 너비 520 이하로 아래 가운데. 아이폰 기본 글래스(`-apple-visual-effect`)는 애플 앱 전용이라 웹에서 못 씀 → 직접: 크롬 계열은 `glass.js` 굴절 필터, 사파리는 흐림·채도·위쪽 반사광(`::before`)·가는 테. 누르는 순간 방울이 떠올라 손가락 밑으로(`glide(...hold, to)`), 밀면 따라오고, 놓으면 용수철. 막대 움직임 시간은 늘 같다(끄기만 따름).
+- (예전) 유리 — `prefs.tabStyle`: auto / glass / classic.
   - `.dock`(화면 위에 떠 있음, 아래 `max(10px, safe-area − 8px)`) 안에 `.tabbar.glass`(흰 유리 캡슐 62px) + `.dock-add`(흰 유리 원 ＋, 모든 탭에서 할 일 추가, 과목 화면이면 그 과목 골라 둠).
   - 쉴 때: 고른 탭 뒤 회색 알약 `.lens`. 탭을 바꾸는 동안만 `.lens-glass`(막대보다 큰 투명 유리 방울: 흰 테두리·그림자·가장자리 파랑/빨강 옅은 빛)가 떠올라 옮겨 가고 알약으로 내려앉음.
   - **용수철 움직임**(베타 1.2, `motion.js spring·lensFrames·glide`): 빠르게 출발해 부드럽게 멈추고 5% 안쪽으로 지나쳤다 돌아옴, 빠를수록 진행 방향으로 늘어남. 키프레임을 1/60초마다 계산해 넣고 easing은 linear. 알약도 같은 길로. 예전(베타 1.1)은 키프레임 4개라 같은 속도로 보였다 — 사용자: "속도가 일정해, 슬라이드 느낌이 없음".
@@ -237,17 +244,20 @@ repeat     = { id, subjectId, title, days[요일], start, skip[], est?, pri?, at
 - 태블릿·PC: 가운데 창. 휴대폰 크기 PC 창(마우스)은 손잡이 줄 끌기.
 - 열림: 휴대폰은 아래에서 끝까지 올라옴(`EASE_SHEET`, 400ms), 태블릿은 살짝 커지며. 닫힘: 복사본이 아래로 내려감.
   - **기기 스크롤 창은 `.sheet-sc`(스크롤 상자)째 창 높이(px)만큼 움직인다** (`motion.js rise`, 닫힘은 `sheetOut`의 `g.h`). 안의 `.sheet`에 transform을 걸면 아이폰이 움직이는 동안 스크롤 범위를 다시 계산해서 창이 제자리를 지나 화면 위로 올라갔다가 끝나는 순간 뚝 떨어졌다(베타 1.1 영상, 베타 1.2에서 고침).
+- 창을 위로 잡아당겨도 아래가 비지 않게 `.sheet-sc .sheet`의 box-shadow로 창 바탕을 아래로 이어 둠(베타 2.0).
 - 창→창: 배경 그대로. 휴대폰은 앞 창 복사본이 **불투명한 채** 아래로 내려가고(z 32) 새 창이 그 뒤에서 올라옴. 태블릿은 앞 창이 120ms에 지워지고 새 창은 40% 지점부터 나타남. 반투명 두 겹 글자 금지(베타 1.1 영상).
 - 창 종류 키 `sheetKey`: type + id/stage + pickFor + name + rec + book.
 
 ### 6-4. 움직임 (`motion.js`)
-- 단계: 느긋하게 ×1.45 / 보통 / 빠르게 ×0.6 / 끄기. 고른 적 없으면 기기 '동작 줄이기'를 따름. 화면이 안 보일 때는 움직이지 않음.
+- **(베타 2.0) 켜기/끄기만**: `T`(시간)·`E`(곡선) 상수만 씀. 고른 적 없으면 기기 '동작 줄이기'. 화면이 안 보일 때는 움직이지 않음. **다음으로**(`axis`, `useCross(ref, key, dir, z)`): 옛 것 복사본(pin) 0.13초에 흐려지며 24px 반대쪽, 새 것은 30%까지 투명 후 24px에서 들어옴 — 처음 설정·설정 쪽(창 안쪽 칸 `.sheet-b` 자체를 움직임)·창 단계(`Sheet step`)·탭(방향=탭 순서, 같은 탭 안쪽으로 들어가면 1)·태블릿 오른쪽 칸(0).
+- (예전) 단계: 느긋하게 ×1.45 / 보통 / 빠르게 ×0.6 / 끄기.
 - 나타남 = 새로 생길 때 한 번(WAAPI). 사라짐 = **복사본(`m-ghost`)** 을 흐리게 지움(실제 화면은 바로 바뀌고 누를 수 있음). 이름 `ghost`는 `.btn.ghost`와 겹쳐서 쓰지 않음(4차 버그).
 - `capture(el, pin)`: pin이면 원래 자리 rect로 고정. `release(g, parts, base, z, easing)`: 애니메이션이 멈춰도 `d+200ms` 뒤 반드시 지움.
 - **겹쳐 바뀜**(`useCross`, Pad의 직접 처리): 탭·과목·날짜가 바뀌면 옛 화면 복사본(`.m-view`, z 4)이 흐려지는 동안 새 화면이 나타남 → 빈 순간(깜빡임) 없음. '화면을 옮길 때도 부드럽게'(motionView)를 따름.
 - 설정 쪽 넘기기(`motion.js pageCapture·pagePush`, 아이폰 설정처럼): 옛 쪽을 복사해 창 안쪽 칸 크기의 상자(`.m-ghost.m-page`, `.sheet`에 붙임, overflow hidden)에 가둔다. 앞으로: 새 쪽이 z 2·불투명 배경(+옆 여백까지 덮는 그림자)으로 오른쪽에서 덮으며 들어오고, 옛 쪽은 z 1에서 왼쪽 30%로 밀림. 뒤로: 복사본 상자가 z 3·불투명으로 오른쪽으로 걷히고 앞 쪽이 왼쪽 30%에서 옴. 뒤로 가면 앞 쪽의 스크롤 자리를 기억해 둔 값으로(`mem`).
 - 체크: 동그라미 채움 + 제목 형광펜. 막대 너비 transition(예외로 허용).
-- **시작 화면**(`index.html #splash` + CSS + `hideSplash`): 진도 칸 4개 테두리 그리기 → 3개 차례로 채움 → '회독 플래너'가 왼쪽부터 써지듯(clip-path) → 약 1.3초 뒤 흐려지며 앱이 떠오름. 누르면 바로, 움직임 끄면 없음(`sp-still`), 속도는 `--sp-f`. 색은 지난번 `hoedok.bg/ink/ac`(localStorage, 미리 보기는 `preview.` 접두어). 그 앞의 아이폰 시작 이미지(`icons/start-*.png`)도 같은 종이색 → 흰 번쩍임 없음(이미 설치한 홈 화면 앱은 다시 추가해야 바뀔 수 있음).
+- **시작 화면**(베타 2.0): 설치 후 처음 한 번만 `sp-intro`(localStorage `hoedok.intro` 없을 때) — 할 일 카드 3줄이 체크될 때마다 진도 칸이 채워짐 → 이름 → 한 줄, 약 3.4초. 그다음부터 짧은 것 약 1.25초. 걷힐 때 `.splash.out`: 글자 먼저(0.14초) → 바탕(0.3초), 앱에 따로 움직임 없음.
+- (예전 설명) **시작 화면**(`index.html #splash` + CSS + `hideSplash`): 진도 칸 4개 테두리 그리기 → 3개 차례로 채움 → '회독 플래너'가 왼쪽부터 써지듯(clip-path) → 약 1.3초 뒤 흐려지며 앱이 떠오름. 누르면 바로, 움직임 끄면 없음(`sp-still`), 속도는 `--sp-f`. 색은 지난번 `hoedok.bg/ink/ac`(localStorage, 미리 보기는 `preview.` 접두어). 그 앞의 아이폰 시작 이미지(`icons/start-*.png`)도 같은 종이색 → 흰 번쩍임 없음(이미 설치한 홈 화면 앱은 다시 추가해야 바뀔 수 있음).
 
 ### 6-5. 숫자·날짜 칸 (`NumField`·`RangeField`·`DateField`)
 - 치는 동안은 **범위로 고치지 않음**. 칸을 떠나거나 완료를 누를 때 확인. 누르기만 하고 떠나면 아무것도 바꾸지 않음(`dirty`). 누르면 전체 선택. 칸을 보고 있지 않을 때만 실제 값으로 다시 맞춤.
@@ -278,7 +288,10 @@ repeat     = { id, subjectId, title, days[요일], start, skip[], est?, pri?, at
 ## 7. 설정 (`settings.js`) — 애플 설정처럼
 | 쪽(key) | 내용 |
 |---|---|
-| 첫 화면 | (예시면) 예시 끝내기 · 계정 카드 · [화면 및 밝기 · 글자 · 탭 막대와 배치 · 움직임] · [오늘 화면 · 진도 화면 · 달력과 시각] · 공부[시험 · 과목 · 공부 가능 시간] · [홈 화면에 추가 · 기록 관리 · 정보]. 줄마다 색 아이콘(디자인 채도·밝기 안의 hue), 오른쪽에 지금 값 |
+| 첫 화면 (베타 2.0) | (예시면) 예시 끝내고 시작하기 · 계정 카드 · **공부**[학년과 과목 · 시험 · 공부 시간 · 하루가 바뀌는 시각] · **화면**[테마 · 글자 크기 · 움직임(스위치)] · [홈 화면에 추가 · 기록 관리 · 정보]. 강조 색·글꼴·간격·탭 막대·D-day 모양·예상 시간·달력 첫 요일·시각 표시 UI는 뺌(기본값으로) |
+| school 학년과 과목 | 학년·학기 Seg, 과목마다 교과서(출판사) select — 바꾸면 `setBookLabels`+`setBookRange`(되돌리기), 그 학년에 있는데 안 넣은 과목 칩, '과목 순서와 색'(subjects) |
+| theme 테마 | 색 6 견본 + 밝기(기기 따라/밝게/어둡게) |
+| text 글자 크기 · dayStart 하루가 바뀌는 시각 | |
 | display 화면 및 밝기 | 견본(Sample) · 디자인 3 · 밝기(기기 따라/밝게/어둡게) · 강조 색 9 |
 | text 글자 | 견본 · 글꼴(→ font) · 굵은 글씨 · 글자 크기('가' 크기로) · 간격 |
 | layout 탭 막대와 배치 | 아래 탭 막대 모양(자동/유리/기본) · ＋ 위치(기본 막대일 때) · 탭 이름 · 앱을 열면(오늘/진도/성적/마지막 화면) · 태블릿: 오늘 옆에 보일 것 · 목록 너비 |
@@ -288,18 +301,18 @@ repeat     = { id, subjectId, title, days[요일], start, skip[], est?, pri?, at
 | calTime 달력과 시각 | 달력 첫 요일(일/월) · 시각 표시(24시간/오전·오후, `clock()`) · 하루가 바뀌는 시각(공부 설정, 동기화) |
 | time 공부 가능 시간 | 요일별 Stepper·쉬기 · 날짜마다 바꾼 시간 · 쪽당 기본 시간 |
 | exam, subjects, account, data(내보내기·불러오기·모두 지우기), about(버전·쓰는 법·기록은 어디에) | |
-- 화면 설정은 이 기기에만. 공부 설정은 기기끼리.
+- (베타 2.0) 화면 설정도 공부 설정도 로그인하면 기기끼리 맞춘다(LOOK_PREFS). 오늘·진도 화면 보기 설정은 각 화면의 … 메뉴 › 보기 설정.
 
 ---
 
 ## 8. 테스트·점검 (고친 뒤 반드시)
 
-| 무엇 | 어떻게 | 기준(베타 1.2) |
+| 무엇 | 어떻게 | 기준(베타 2.0) |
 |---|---|---|
-| 노드 테스트 | `powershell -ExecutionPolicy Bypass -File tools/node.ps1 tests/run-node.js` | **93개 전부 통과**. 목록 `tests/list.js` (UNIT: html·calc·app / NODE: sw·motion·sync / DOM: ui) |
+| 노드 테스트 | `powershell -ExecutionPolicy Bypass -File tools/node.ps1 tests/run-node.js` | **102개 전부 통과** (curriculum.test.js 추가). 목록 `tests/list.js` (UNIT: html·calc·app / NODE: sw·motion·sync / DOM: ui) |
 | 서비스 워커 | 위에 포함. 파일을 고쳤으면 먼저 `python tools/bump_sw.py` | VERSION이 내용과 맞음, FILES 목록과 실제 import가 일치 |
-| 화면 전수 점검 | 앱을 연 브라우저에서 `const L = await import('/tests/layout-check.js'); await L.run({ fonts, sizes, themes, bars, screens })` | 넘침·두 줄 꺾임·못 누르는 단추 **0**. 휴대폰 360/390px(유리·기본), 태블릿 800×1280·1280×800 |
-| 움직임 점검 | `(await import('/tests/motion-check.js')).runAll()` | 휴대폰 145·145·145·113, 태블릿 114·114·114·85 전부 통과 (베타 1.2에 N9·C5·P2~P5·Q1·R1~R4 추가) |
+| 화면 전수 점검 | 앱을 연 브라우저에서 `const L = await import('/tests/layout-check.js'); await L.run({ sizes: ['md','xl'] })` (기본: 글꼴 프리텐다드, 테마 6) | 넘침·두 줄 꺾임·못 누르는 단추 **0** — 휴대폰 360px 648 · 태블릿 648 (처음 화면 6단계 포함). 휴대폰 360/390px(유리·기본), 태블릿 800×1280·1280×800 |
+| 움직임 점검 | `(await import('/tests/motion-check.js')).runAll()` | 켜기·끄기 두 단계: 휴대폰 144·112, 태블릿 113·84 전부 통과 |
 | 브라우저 테스트 | `tests/index.html` | |
 | 동기화 | `docs/동기화-체크리스트.md` | |
 - 화면 전수 점검 화면 목록: 오늘, 진도, 과목, 과목(칸), 칸 채우기, 쪽 적기, 교재 고치기, 단원 이름, 과목 추가 › 교재, 성적, 시험 결과, 설정 + 쪽마다(화면·글자·글꼴·탭 막대·움직임·오늘·진도·달력·공부 시간·기록 관리·정보·계정), 할 일, 할 일 › 더 보기, 할 일 추가, 다시 나누기, 돌아보기, 달력, 홈 화면에 추가. 아주 크게는 굵은 글씨 함께. 떠 있는 `.dock`·`.fab`·`.toast`가 덮는 것과 가장자리 2px에 걸친 것은 제외.
@@ -347,6 +360,8 @@ repeat     = { id, subjectId, title, days[요일], start, skip[], est?, pri?, at
 | `개발-계획.md` | 차수별 계획(계획→검토→추가→검토→최종 검토→실행). 1차~5차(베타 1.0) |
 | `변경기록.md` | 무엇이 왜 바뀌었는지, 최근 것이 위 (베타 1.2, 실제 앱에 올림, 베타 1.1, 베타 1.0, 4차 …) |
 | `설계-원칙.md` | 원칙 1~9, 화면 층 표, 버전·미리 보기 규칙, 핵심 흐름 |
+| `디자인-규칙.md` | (베타 2.0) 간격·글자·색·모양·단추·배치·말 — 읽은 글(람스·HIG·Refactoring UI·Laws of UX·머티리얼) |
+| `움직임-규칙.md` | (베타 2.0) 움직임 4종류·시간·곡선·규칙 |
 | `움직임-버그-체크리스트.md` | A~L(기존) + M 겹쳐 바뀜, N 휴대폰 창, O 유리 막대, P 설정 쪽 넘기기, 기록 표 |
 | `동기화-체크리스트.md` | 로그인·예시·미리 보기 공간·두 기기 시험 |
 | `설치와-동기화.md` | 사용자용: 홈 화면에 추가, Supabase 만들기·SQL·계정·가입 막기 |
@@ -368,6 +383,7 @@ repeat     = { id, subjectId, title, days[요일], start, skip[], est?, pri?, at
 | 10-04 11시 | **베타 1.1** (`beta` 20e4e80, 미리 보기 "10/4 11:23"): 사용자 녹화 3개 분석 → 창 튐 버그(column-reverse), 키 큰 창 14px 밀림, **전화 앱 같은 리퀴드 글래스**(회색 알약 + 떠오르는 유리 방울, 흰 유리 ＋·위쪽 단추), **시작 화면**(비블레시아 참고), 빈 화면 다음 행동, 교재 없는 과목 한 줄 |
 | 10-04 오후 | **"올려 줘"** → `beta`를 main에 합침(a42c0a7): 4차 + 베타 1.0·1.1이 실제 앱에 반영 |
 | 10-04 저녁 | **베타 1.2** (`beta`, 미리 보기): 실제 앱 영상(54초) 분석 → 창이 열릴 때 위로 튀던 버그(스크롤 상자째 움직임), 창→창·설정 쪽 넘기기의 두 겹 글자(불투명하게 덮기), **막대 렌즈 용수철 + 손가락으로 밀기**, 시작할 때 흰 화면(시작 이미지), '할 일 0/6 · 단원 0/2', 계정 카드 이메일 두 번, 처음 설정에서 알림이 칸을 가림, 설정 뒤로 가면 스크롤 자리 기억 |
+| 10-04 밤 | **베타 2.0** (`beta`, 미리 보기): 사용자 요청(실제로 쓸 앱) → 디자인·움직임 규칙 문서, 움직임 켜기/끄기만·가로 페이드, 설정 쪽 걸림·창 아래 잘림 고침, **모든 기기 같은 리퀴드 글래스**(크롬은 굴절), 처음 한 번 소개 움직임, **로그인부터 시작하는 처음 화면 · 학년 → 과목 → 교과서 단원(2022 개정 고1)**, 설정 정리·계정 동기화, 테마 6, 문구('공부 기록') |
 
 ### 11-1. 사용자가 남긴 피드백 원문 요지 (잊지 말 것)
 - "겉으로는 화려하나 실질적인 알맹이가 없다. 난해하고 사용하기 힘들다. 굳이 써야 하나 싶다." → 알맹이 원칙.
@@ -381,7 +397,8 @@ repeat     = { id, subjectId, title, days[요일], start, skip[], est?, pri?, at
 ### 11-2. 남은 것·확인할 것
 - 사용자 기기에서만 확인 가능: 창이 열릴 때 위로 튀지 않는지(베타 1.2), 막대 방울의 미끄러지는 느낌·밀기, 시작할 때 흰 화면(홈 화면 앱 다시 추가), 아이폰 창 끌기 느낌, 확대 안 됨, 갤럭시 진동, 두 기기 실제 동기화.
 - 다른 기기가 옛 버전일 때 새 필드(book.unit/labels/pace, sub.logk)는 무시되지만 칸 기록(marks)은 읽힘 → 두 기기 모두 업데이트 권장.
-- 웹에서 못 하는 것(정직하게 말할 것): 유리 방울 안 글자 확대(굴절), iOS 진동, 120Hz JS 애니메이션(스크롤·CSS 애니메이션만 기기 속도).
+- 웹에서 못 하는 것(정직하게 말할 것): **아이폰 기본 리퀴드 글래스**(`-apple-visual-effect`는 애플 앱 전용 — 웹·PWA 불가, 진짜로 쓰려면 Mac+Xcode로 네이티브 앱), 사파리에서 유리 굴절(크롬 계열만), iOS 진동, 120Hz JS 애니메이션.
+- 교과서 단원: 확인 못 한 출판사(공통국어 대부분, 공통영어 동아·천재·비상·지학사, 과학탐구실험)는 '1단원…' — 사용자가 교과서 목차를 알려 주면 `curriculum.js`에 넣는다. 고2·3 선택과목 단원은 아직 없음.
 - 앞으로 직관성 개선 후보: 처음 설정에서 교재를 건너뛴 사람 안내, 할 일 추가의 진도 연결을 더 눈에 띄게, 설정과 … 메뉴의 겹침 정리.
 
 ### 11-3. 자주 생긴 실수 (다시 하지 말 것)

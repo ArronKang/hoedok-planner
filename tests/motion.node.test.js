@@ -23,13 +23,16 @@ test('움직임: 고른 적 없고 동작 줄이기를 안 켰으면 보통', ()
   eq(M.ms(220), 220);
 });
 
-test('움직임: 직접 고르면 기기 설정보다 그 값을 따른다', () => {
+test('움직임: 직접 켜면 기기 설정보다 그 값을 따르고, 속도는 하나 (움직임 규칙)', () => {
   fake.matches = true;
+  C.setPrefs({ motion: 'normal' });
+  eq(M.level(), 'normal');
+  eq(M.ms(200), 200);
+  // 예전의 느긋하게·빠르게는 켜기로 읽는다 (막대·창 시간이 설정에 따라 바뀌지 않게)
   C.setPrefs({ motion: 'fast' });
-  eq(M.level(), 'fast');
-  eq(M.ms(200), 120);
+  eq(M.ms(200), 200);
   C.setPrefs({ motion: 'slow' });
-  eq(M.ms(200), 290);
+  eq(M.ms(200), 200);
 });
 
 test('움직임: 끄기면 움직이지 않고 복사본도 만들지 않는다', () => {
@@ -37,10 +40,10 @@ test('움직임: 끄기면 움직이지 않고 복사본도 만들지 않는다'
   const el = { animate: () => 'ran', cloneNode: () => ({}) };
   eq(M.play(el, [], 200), null);
   eq(M.capture(el), null);
-  C.setPrefs({ motion: 'normal', motionView: false });
-  eq(M.viewOn(), false, '화면 옮길 때만 끔');
-  eq(M.play(el, [], 200), 'ran', '창·알림은 그대로 움직임');
-  C.setPrefs({ motion: null, motionView: true });
+  C.setPrefs({ motion: 'normal' });
+  eq(M.viewOn(), true, '켜면 화면 옮기기도 함께 (따로 고르지 않음)');
+  eq(M.play(el, [], 200), 'ran');
+  C.setPrefs({ motion: null });
 });
 
 test('움직임: 모르는 값이면 기본으로', () => {

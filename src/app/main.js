@@ -10,6 +10,7 @@ import { initSync, needsAttention } from '../sync/sync.js';
 import { PREVIEW, ns, previewLabel } from '../env.js';
 import { syncState } from '../sync/state.js';
 import { ensureFont } from './fonts.js';
+import { fitGlass } from './glass.js';
 import { Icon, Toast, hue, StageBar, useCross, Sheet, glassBar } from './kit.js';
 import { TodayScreen, TodayMenu, TaskSheet, AddSheet, EndDaySheet, CalendarSheet, WeekSheet, PlanSheet, PhotoSheet, DueSheet, RepeatsSheet } from './today.js';
 import { ProgressList, SubjectPage, RecordSheet, SubjectMenu, ProgressMenu, ColorSheet, SetupSheet, RoutineSheet, EditSheet, AddSubjectSheet, LabelsSheet } from './progress.js';
@@ -122,20 +123,22 @@ function addTask() {
 }
 
 /**
- * 유리 막대 밀기 (아이폰 전화 앱처럼): 막대를 누른 채 옆으로 밀면 방울이 손가락을 따라오고,
- * 놓으면 가까운 탭으로 내려앉으며 그 탭이 열린다. 누르기만 하면 지금처럼 그 탭(단추가 처리).
- * 탭은 셋뿐이라 '설정' 칸 쪽으로 더 밀면 고무줄처럼 버틴다 (설정 창이 갑자기 열리지 않게).
- * 돌려주는 ref: 밀어서 탭을 바꿨을 때 방울이 출발할 자리 (Phone이 다시 그린 뒤 읽는다).
+ * 유리 막대 누르기·밀기 (아이폰 전화 앱처럼, 움직임 규칙 ④):
+ * - 탭을 누르는 순간 회색 알약이 유리 방울로 떠올라 손가락 밑으로 간다. 떼면 그 탭으로 내려앉고 그 탭이 열린다.
+ * - 누른 채 옆으로 밀면 방울이 손가락을 따라온다. 놓으면 가까운 탭(튕기면 그 방향으로 조금 더)으로.
+ * - 탭은 셋뿐이라 '설정' 칸 쪽으로는 고무줄처럼 버틴다. 설정 단추를 누르는 것은 그냥 단추.
+ * - 손가락을 뗀 뒤 따라오는 '누름'(click)은 한 번 삼킨다 (같은 동작이 두 번 되지 않게). 키보드로 누르는 것은 그대로.
+ * 돌려주는 ref: 탭을 바꿨을 때 방울이 출발할 자리 (Dock이 다시 그린 뒤 읽는다).
  */
-function useTabSlide(nav, lens, bubble, idx, glass) {
+function useTabSlide(nav, lens, bubble, idx) {
   const landed = useRef(null);
   const cur = useRef(idx);
   cur.current = idx;
   useEffect(() => {
     const el = nav.current;
-    if (!el || !glass) return;
+    if (!el) return;
     let s = null;
-    let swallow = 0; // 밀기가 끝난 직후의 '누름'은 한 번 삼킨다 (손가락을 뗀 자리의 단추가 또 눌리지 않게)
+    let swallow = 0;
     const geo = () => {
       const r = el.getBoundingClientRect();
       return { r, w: (r.width - 8) / (TABS.length + 1) };
@@ -149,51 +152,77 @@ function useTabSlide(nav, lens, bubble, idx, glass) {
       if (L > hi) L = hi + w * 0.35 * (1 - Math.exp(-(L - hi) / (w * 0.8)));
       return { L, w };
     };
+    const txAt = (x) => {
+      const { L, w } = leftAt(x);
+      return L - (4 + cur.current * w);
+    };
+    const follow = (x, v) => {
+      const { w } = geo();
+      const tx = txAt(x);
+      const str = Math.min(0.12, ((Math.abs(v) * 1000) / w) * 0.01); // 빨리 밀수록 조금 늘어남
+      for (const b of [lens.current, bubble.current]) if (b && b.getAnimations) for (const a of b.getAnimations()) a.cancel();
+      if (bubble.current) Object.assign(bubble.current.style, { opacity: '1', transform: `translateX(${tx.toFixed(1)}px) scale(${(M.LIFT.sx + str).toFixed(3)}, ${(M.LIFT.sy - str * 0.5).toFixed(3)})` });
+      if (lens.current) Object.assign(lens.current.style, { opacity: '0', transform: `translateX(${tx.toFixed(1)}px)` });
+    };
     const down = (e) => {
       if (e.pointerType === 'mouse' && e.button !== 0) return;
-      s = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, x: e.clientX, t: e.timeStamp, v: 0 };
+      const b = e.target.closest('button[data-tab]');
+      if (!b) return; // 설정 단추 등은 그냥 단추
+      s = { id: e.pointerId, x0: e.clientX, y0: e.clientY, on: false, x: e.clientX, t: e.timeStamp, v: 0, tab: b.dataset.tab };
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* 무시 */
+      }
+      // 누르는 순간 떠오른다 (지금 탭 자리에서 손가락 밑으로)
+      M.glide(lens.current, bubble.current, 0, false, true, txAt(e.clientX));
     };
     const move = (e) => {
       if (!s || s.id !== e.pointerId) return;
+      const dx = e.clientX - s.x0, dy = e.clientY - s.y0;
       if (!s.on) {
-        const dx = e.clientX - s.x0, dy = e.clientY - s.y0;
-        if (Math.abs(dx) < 7) return;
-        if (Math.abs(dy) > Math.abs(dx)) return (s = null);
-        s.on = true;
-        try {
-          el.setPointerCapture(e.pointerId);
-        } catch {
-          /* 무시 */
+        if (Math.abs(dy) > 14 && Math.abs(dy) > Math.abs(dx) * 1.5) {
+          // 세로로 움직이면 누르기 취소 → 제자리로 내려앉음
+          s = null;
+          M.glide(lens.current, bubble.current, M.currentX(bubble.current), true);
+          return;
         }
-        for (const b of [lens.current, bubble.current]) if (b && b.getAnimations) for (const a of b.getAnimations()) a.cancel();
+        if (Math.abs(dx) < 7) return;
+        s.on = true;
       }
       const dt = Math.max(1, e.timeStamp - s.t);
       s.v = s.v * 0.6 + ((e.clientX - s.x) / dt) * 0.4; // px/ms, 부드럽게
       s.x = e.clientX;
       s.t = e.timeStamp;
-      const { L, w } = leftAt(e.clientX);
-      const tx = L - (4 + cur.current * w);
-      const str = Math.min(0.12, ((Math.abs(s.v) * 1000) / w) * 0.01); // 빨리 밀수록 조금 늘어남
-      if (bubble.current) Object.assign(bubble.current.style, { opacity: '1', transform: `translateX(${tx.toFixed(1)}px) scale(${(1.16 + str).toFixed(3)}, ${(1.3 - str * 0.5).toFixed(3)})` });
-      if (lens.current) Object.assign(lens.current.style, { opacity: '0', transform: `translateX(${tx.toFixed(1)}px)` });
+      follow(e.clientX, s.v);
     };
     const up = (e, cancel = false) => {
       const st = s;
       s = null;
-      if (!st || !st.on || st.id !== e.pointerId) return;
+      if (!st || st.id !== e.pointerId) return;
       swallow = e.timeStamp;
-      const { L, w } = leftAt(cancel ? -1e4 : e.clientX + st.v * 90); // 튕기듯 놓으면 그 방향으로 조금 더
-      const k = cancel ? cur.current : Math.max(0, Math.min(TABS.length - 1, Math.round((L - 4) / w)));
-      const from = leftAt(st.x).L - (4 + k * w); // 방울이 지금 있는 자리 (도착할 칸 기준)
+      const { w } = geo();
+      const now = M.currentX(bubble.current) || txAt(st.x);
+      let k;
+      if (cancel) k = cur.current;
+      else if (!st.on) k = TABS.findIndex(([id]) => id === st.tab); // 누르기만: 누른 탭
+      else {
+        const { L } = leftAt(e.clientX + st.v * 90);
+        k = Math.max(0, Math.min(TABS.length - 1, Math.round((L - 4) / w)));
+      }
+      const from = now - (k - cur.current) * w; // 방울이 지금 있는 자리 (도착할 칸 기준)
       if (k !== cur.current) {
         landed.current = { from };
-        C.go(TABS[k][0]);
-      } else M.glide(lens.current, bubble.current, from, true);
+        tapTab(TABS[k][0]);
+      } else {
+        M.glide(lens.current, bubble.current, from, true);
+        if (!cancel && !st.on) tapTab(TABS[k][0]); // 지금 탭을 다시 누름: 처음 화면 → 맨 위로
+      }
     };
     const onUp = (e) => up(e);
     const onCancel = (e) => up(e, true);
     const click = (e) => {
-      if (swallow && e.timeStamp - swallow < 500) {
+      if (swallow && e.timeStamp - swallow < 600 && e.target.closest('button[data-tab]')) {
         swallow = 0;
         e.stopPropagation();
         e.preventDefault();
@@ -211,61 +240,75 @@ function useTabSlide(nav, lens, bubble, idx, glass) {
       el.removeEventListener('pointercancel', onCancel);
       el.removeEventListener('click', click, true);
     };
-  }, [glass]);
+  }, []);
   return landed;
 }
 
-function Phone() {
-  const ui = UI();
+/**
+ * 아래 유리 막대 — 휴대폰·태블릿·PC 모두 같은 것 (화면 아래 가운데에 떠 있음).
+ * 쉴 때는 고른 탭 뒤의 회색 알약. 탭이 바뀌면 알약이 유리 방울로 떠올라 용수철처럼 미끄러져 내려앉는다.
+ */
+function Dock({ tab }) {
   const p = PR();
-  const tab = ui.tab;
-  const t = C.top(tab);
-  const back = () => C.pop(tab);
-  const view = useRef(null);
   const nav = useRef(null);
   const lens = useRef(null);
   const bubble = useRef(null);
-  const glass = glassBar();
-  useCross(view, `${tab}|${entryKey(t)}|${tab === 'today' ? C.viewDay() : ''}`, 4);
   const idx = TABS.findIndex(([id]) => id === tab);
-  // 유리 막대 (아이폰 전화 앱처럼): 쉴 때는 고른 탭 뒤의 회색 알약.
-  // 탭을 바꾸면 알약이 막대보다 큰 투명 유리 방울로 떠올라 용수철처럼 새 탭으로 미끄러지고, 다시 알약으로 내려앉는다.
-  // 막대를 누른 채 옆으로 밀면 방울이 손가락을 따라온다 (useTabSlide).
   const lastIdx = useRef(idx);
-  const landed = useTabSlide(nav, lens, bubble, idx, glass);
+  const landed = useTabSlide(nav, lens, bubble, idx);
+  // 크롬 계열은 막대 크기에 맞춘 굴절 필터 (glass.js)
+  useEffect(() => {
+    const d = nav.current && nav.current.parentElement;
+    if (!d) return;
+    fitGlass(d);
+    if (typeof ResizeObserver !== 'function') return;
+    const ro = new ResizeObserver(() => fitGlass(d));
+    ro.observe(d);
+    return () => ro.disconnect();
+  }, []);
   useLayoutEffect(() => {
     const from = lastIdx.current;
     lastIdx.current = idx;
     const l = landed.current;
     landed.current = null;
-    if (!glass || idx < 0 || !lens.current) return;
+    if (idx < 0 || !lens.current) return;
     if (l) return M.glide(lens.current, bubble.current, l.from, true); // 손가락을 놓은 자리에서 내려앉는다
     if (from === idx || from < 0) return;
     M.glide(lens.current, bubble.current, (from - idx) * bubble.current.offsetWidth);
   }, [idx]);
+  const labels = p.tabLabels !== false;
+  return html`<div class=${'dock' + (labels ? '' : ' bare')}>
+    <nav class="tabbar glass" ref=${nav} aria-label="주요 화면" style=${{ '--n': TABS.length + 1, '--i': Math.max(0, idx) }}>
+      ${idx >= 0 ? html`<i class="lens" ref=${lens} aria-hidden="true"></i><i class="lens-glass" ref=${bubble} aria-hidden="true"></i>` : null}
+      ${TABS.map(([id, label, icon]) => html`<button key=${id} data-tab=${id} aria-current=${tab === id ? 'page' : 'false'} aria-label=${labels ? undefined : label} onClick=${() => tapTab(id)}><span class="ic"><${Icon} n=${icon} s=${24} /></span>${labels ? html`<span class="lb">${label}</span>` : null}</button>`)}
+      <button key="set" aria-label=${labels ? undefined : '설정'} onClick=${() => C.openSheet({ type: 'settings' })}><span class="ic"><${Icon} n="gear" s=${24} /><${SettingsDot} /></span>${labels ? html`<span class="lb">설정</span>` : null}</button>
+    </nav>
+    <button class="dock-add" aria-label="할 일 추가" onClick=${addTask}><${Icon} n="plus" w=${2.2} /></button>
+  </div>`;
+}
+
+/** 화면이 바뀌는 방향: 오른쪽 탭으로 가거나 안쪽으로 들어가면 앞으로(1), 반대면 뒤로(-1), 같은 깊이면 제자리(0) */
+const viewDir = (a, b) => {
+  const [ta, da] = a.split('|'), [tb, db] = b.split('|');
+  if (ta !== tb) return Math.sign(TABS.findIndex(([id]) => id === tb) - TABS.findIndex(([id]) => id === ta));
+  return Math.sign(+db - +da);
+};
+const viewKey = (tab, t) => `${tab}|${C.UI().stacks[tab].length}|${entryKey(t)}|${tab === 'today' ? C.viewDay() : ''}`;
+
+function Phone() {
+  const ui = UI();
+  const tab = ui.tab;
+  const t = C.top(tab);
+  const back = () => C.pop(tab);
+  const view = useRef(null);
+  useCross(view, viewKey(tab, t), viewDir);
   let main;
   if (tab === 'today') main = html`<${TodayScreen} />`;
   else if (tab === 'progress') main = t ? html`<${SubjectPage} key=${t.id} id=${t.id} back=${back} />` : html`<${ProgressList} />`;
   else main = t ? gradeDetail(t, back) : html`<${GradesHome} />`;
-  const labels = p.tabLabels !== false;
-  const btns = [
-    ...TABS.map(([id, label, icon]) => html`<button key=${id} aria-current=${tab === id ? 'page' : 'false'} aria-label=${labels ? undefined : label} onClick=${() => tapTab(id)}><span class="ic"><${Icon} n=${icon} s=${glass ? 24 : 25} /></span>${labels ? html`<span class="lb">${label}</span>` : null}</button>`),
-    html`<button key="set" aria-label=${labels ? undefined : '설정'} onClick=${() => C.openSheet({ type: 'settings' })}><span class="ic"><${Icon} n="gear" s=${glass ? 24 : 25} /><${SettingsDot} /></span>${labels ? html`<span class="lb">설정</span>` : null}</button>`,
-  ];
-  if (glass)
-    return html`<div style="display:contents">
-      <div class="view glass-view" ref=${view}>${main}</div>
-      <div class=${'dock' + (labels ? '' : ' bare')}>
-        <nav class="tabbar glass" ref=${nav} aria-label="주요 화면" style=${{ '--n': TABS.length + 1, '--i': Math.max(0, idx) }}>
-          ${idx >= 0 ? html`<i class="lens" ref=${lens} aria-hidden="true"></i><i class="lens-glass" ref=${bubble} aria-hidden="true"></i>` : null}
-          ${btns}
-        </nav>
-        <button class="dock-add" aria-label="할 일 추가" onClick=${addTask}><${Icon} n="plus" w=${2.2} /></button>
-      </div>
-    </div>`;
   return html`<div style="display:contents">
-    <div class="view" ref=${view}>${main}</div>
-    <nav class=${'tabbar' + (labels ? '' : ' bare')} aria-label="주요 화면">${btns}</nav>
+    <div class="view glass-view" ref=${view}>${main}</div>
+    <${Dock} tab=${tab} />
   </div>`;
 }
 
@@ -283,14 +326,16 @@ function Pad() {
   if (last.current.detail === null) last.current.detail = detail;
   if (last.current.tab !== tab || last.current.detail !== detail) {
     const whole = last.current.tab !== tab;
-    job.current = M.viewOn() ? { whole, g: M.viewCapture(whole ? view.current : mainCol.current) } : null;
+    const dir = Math.sign(TABS.findIndex(([id]) => id === tab) - TABS.findIndex(([id]) => id === last.current.tab));
+    job.current = M.on() ? { whole, dir, g: M.viewCapture(whole ? view.current : mainCol.current) } : null;
     last.current = { tab, detail };
   }
   useLayoutEffect(() => {
     const j = job.current;
     job.current = null;
-    if (!j || !M.viewOn()) return;
-    M.crossfade(j.g, j.whole ? view.current : mainCol.current, 200, j.whole ? 4 : 0);
+    if (!j || !M.on()) return;
+    // 움직임 규칙 ②: 탭을 옮기면 화면 전체가 그 방향으로, 같은 탭에서 고른 것만 바뀌면 오른쪽 칸만 제자리에서
+    M.axis(j.g, j.whole ? view.current : mainCol.current, j.whole ? j.dir : 0);
   });
   let cols;
   if (tab === 'today') {
@@ -304,14 +349,10 @@ function Pad() {
   } else {
     cols = html`<div class=${'col list w-' + p.listWidth}><${GradesHome} /></div><div class="col main" ref=${mainCol}>${gradeDetail(t, ui.stacks.grades.length > 1 ? () => C.pop('grades') : null) || html`<div class="placeholder">왼쪽에서 시험이나 학기를 골라 주세요</div>`}</div>`;
   }
-  const labels = p.tabLabels !== false;
+  // 태블릿·PC도 휴대폰과 같은 유리 막대 (아래 가운데에 떠 있음) — 기기가 바뀌어도 같은 앱
   return html`<div style="display:contents">
-    <aside class=${'side' + (labels ? '' : ' bare')} aria-label="주요 화면">
-      ${TABS.map(([id, label, icon]) => html`<button key=${id} aria-current=${tab === id ? 'page' : 'false'} aria-label=${labels ? undefined : label} onClick=${() => tapTab(id)}><${Icon} n=${icon} />${labels ? html`<span>${label}</span>` : null}</button>`)}
-      <span class="sp"></span>
-      <button aria-label=${labels ? undefined : '설정'} onClick=${() => C.openSheet({ type: 'settings' })}><span class="ic"><${Icon} n="gear" /><${SettingsDot} /></span>${labels ? html`<span>설정</span>` : null}</button>
-    </aside>
-    <div class="view pad-view" ref=${view}>${cols}</div>
+    <div class="view pad-view glass-view" ref=${view}>${cols}</div>
+    <${Dock} tab=${tab} />
   </div>`;
 }
 
@@ -381,7 +422,7 @@ function App() {
   const sk = Sh ? sheetKey(sh) : null;
   const [sheetLayer, toastLayer] = useExits(sk, ui.toast ? ui.toast.id : null);
   useEffect(() => ensureFont(p.font), [p.font]);
-  return html`<div class=${`device ${dev} fullscreen${PREVIEW ? ' preview' : ''}`} data-theme=${p.theme} data-mode=${dark ? 'dark' : 'light'} data-size=${p.size} data-font=${p.font || 'pretendard'} data-density=${p.density} data-hand=${p.hand} data-motion=${M.level()} data-bar=${dev === 'phone' && glassBar() ? 'glass' : 'classic'} data-accent=${p.accent || 'theme'} data-bold=${p.bold ? 'on' : 'off'} id="device">
+  return html`<div class=${`device ${dev} fullscreen${PREVIEW ? ' preview' : ''}`} data-theme=${p.theme} data-mode=${dark ? 'dark' : 'light'} data-size=${p.size} data-font=${p.font || 'pretendard'} data-density=${p.density} data-hand=${p.hand} data-motion=${M.level()} data-bar="glass" data-accent=${p.accent || 'theme'} data-bold=${p.bold ? 'on' : 'off'} id="device">
     ${PREVIEW ? html`<${PreviewBar} />` : null}
     <${StorageNote} />
     ${err ? html`<${Crash} err=${err} reset=${reset} />` : !s.data.onboarded ? html`<${Onboarding} />` : dev === 'pad' ? html`<${Pad} />` : html`<${Phone} />`}
@@ -462,25 +503,31 @@ function syncChrome() {
 }
 
 /**
- * 시작 화면 걷어 내기: 칸이 채워지고 이름이 다 써진 뒤(앱을 연 지 약 1.3초) 흐려지며 앱이 떠오른다.
+ * 시작 화면 걷어 내기: 칸이 채워지고 이름이 다 써진 뒤 글자가 먼저 사라지고 바탕이 걷힌다.
  * 앱을 늦게 불러왔으면 바로, 누르면 바로, 움직임을 껐으면 기다리지 않는다.
  */
 function hideSplash() {
   const sp = document.getElementById('splash');
   if (!sp) return;
   const still = document.documentElement.classList.contains('sp-still') || !M.on();
-  const f = parseFloat(getComputedStyle(sp).getPropertyValue('--f')) || 1;
+  const intro = document.documentElement.classList.contains('sp-intro');
   const go = () => {
     if (sp.dataset.gone) return;
     sp.dataset.gone = '1';
+    try {
+      localStorage.setItem(ns('hoedok.intro'), '1'); // 소개는 한 번만
+    } catch {
+      /* 무시 */
+    }
     if (still) return sp.remove();
+    // 움직임 규칙: 글자 먼저 사라지고(0.14초) → 바탕이 걷힌다(0.3초). 앱은 그 아래에 이미 있다
     sp.classList.add('out');
-    M.play(document.getElementById('device'), [{ opacity: 0, transform: 'translateY(14px) scale(.985)' }, { opacity: 1, transform: 'none' }], 460, M.EASE_SHEET);
-    setTimeout(() => sp.remove(), 460 * f + 80);
+    setTimeout(() => sp.remove(), 520);
   };
   if (still) return go();
   sp.addEventListener('pointerdown', go, { once: true });
-  setTimeout(go, Math.max(0, 1300 * f - performance.now()));
+  // 설치 후 처음 한 번(소개)은 약 3.4초, 그다음부터는 약 1.25초
+  setTimeout(go, Math.max(0, (intro ? 3400 : 1250) - performance.now()));
 }
 
 /** 고른 글꼴을 저장소를 열기 전에 먼저 부른다 → 첫 화면부터 그 글꼴 */

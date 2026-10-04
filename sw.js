@@ -3,7 +3,7 @@
 // - 글꼴처럼 다른 주소에서 오는 파일은 처음 쓸 때 저장해 두고 뒤에서 새로 고친다.
 // - 서버(동기화) 요청은 건드리지 않는다.
 // 파일을 고치면 `python tools/bump_sw.py`로 VERSION을 새로 계산한다 (테스트가 확인함).
-const VERSION = 'd0a8acce469f';
+const VERSION = '46acb2fdbbff';
 const APP = 'hoedok-app-' + VERSION;
 const RUNTIME = 'hoedok-runtime';
 const FILES = [
@@ -35,6 +35,8 @@ const FILES = [
   'src/app/onboarding.js',
   'src/app/account.js',
   'src/app/fonts.js',
+  'src/app/glass.js',
+  'src/app/curriculum.js',
   'src/lib/html.js',
   'src/lib/ui.js',
   'src/core/date.js',

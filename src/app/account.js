@@ -41,7 +41,7 @@ const hasLocalData = () => C.D().onboarded || C.D().tasks.length > 0 || C.D().su
 
 const Err = ({ msg }) => (msg ? html`<p class="hint err" role="alert">${msg}</p>` : null);
 
-export function AccountPage() {
+export function AccountPage({ ob } = {}) {
   const s = useStore(syncState);
   const [editServer, setEditServer] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -145,7 +145,9 @@ export function AccountPage() {
     return html`<div>
       ${s.lost
         ? html`<p class="note-line warn">로그인이 풀렸어요. 같은 이메일로 다시 로그인하면 이어서 맞춰요. 이 기기 기록은 그대로예요.</p>`
-        : html`<p class="sub" style="margin:0 0 12px">로그인하면 휴대폰과 태블릿이 같은 공부 기록을 써요. 화면 설정(디자인·글꼴·글자 크기)은 기기마다 따로예요.</p>`}
+        : ob
+          ? null
+          : html`<p class="sub" style="margin:0 0 12px">로그인하면 휴대폰과 태블릿이 같은 공부 기록과 설정을 써요.</p>`}
       ${demo ? html`<p class="note-line">지금은 예시를 보고 있어요. 로그인하면 예시는 지우고 계정의 기록을 받아 와요.</p>` : null}
       ${iosBrowser
         ? html`<p class="note-line">아이폰은 <b>홈 화면 아이콘으로 연 앱</b>에서 로그인해 주세요. Safari와 아이콘 앱은 기록이 따로예요. <button class="link" onClick=${() => C.openSheet({ type: 'install' })}>홈 화면에 추가하는 법</button></p>`
@@ -192,7 +194,7 @@ export function AccountPage() {
       ${s.pending && s.status !== 'syncing' ? html`<div class="set-row"><span class="l"><b>아직 안 올린 변경</b><small>${s.pending}개 · 인터넷이 되면 저절로 올라가요</small></span></div>` : null}
     </div>
     ${s.status === 'error' && s.error ? html`<${Err} msg=${s.error} />` : null}
-    <p class="hint">한 기기에서 체크하면 다른 기기에는 앱을 열 때와 켜 둔 동안 45초마다 맞춰져요. 두 기기에서 같은 것을 고치면 나중에 고친 쪽이 남아요. 화면 설정(디자인·글꼴·글자 크기)은 기기마다 따로예요.</p>
+    <p class="hint">한 기기에서 체크하면 다른 기기에는 앱을 열 때와 켜 둔 동안 45초마다 맞춰져요. 두 기기에서 같은 것을 고치면 나중에 고친 쪽이 남아요. 테마·글자 크기 같은 화면 설정도 함께 맞춰져요.</p>
     <div class="set-list" style="margin-top:18px">
       <button class="set-row" onClick=${() => run(() => S.signOut())}><span class="l"><b>로그아웃</b><small>이 기기 기록은 그대로 둬요</small></span></button>
       <button class="set-row danger" onClick=${() => {

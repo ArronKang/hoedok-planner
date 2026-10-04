@@ -119,14 +119,13 @@ const SCREENS = [
   ['성적', () => C.go('grades')],
   ['시험 결과', () => C.D().pastExams[0] && C.push('grades', { view: 'exam', id: C.D().pastExams[0].id }, true)],
   ['설정', () => C.openSheet({ type: 'settings' })],
-  ['설정 › 화면', () => C.openSheet({ type: 'settings', page: 'display' })],
-  ['설정 › 글자', () => C.openSheet({ type: 'settings', page: 'text' })],
-  ['설정 › 글꼴', () => C.openSheet({ type: 'settings', page: 'font' })],
-  ['설정 › 탭 막대', () => C.openSheet({ type: 'settings', page: 'layout' })],
-  ['설정 › 움직임', () => C.openSheet({ type: 'settings', page: 'motion' })],
+  ['설정 › 학년과 과목', () => C.openSheet({ type: 'settings', page: 'school' })],
+  ['설정 › 과목 순서', () => C.openSheet({ type: 'settings', page: 'subjects' })],
+  ['설정 › 테마', () => C.openSheet({ type: 'settings', page: 'theme' })],
+  ['설정 › 글자 크기', () => C.openSheet({ type: 'settings', page: 'text' })],
+  ['설정 › 하루가 바뀌는 시각', () => C.openSheet({ type: 'settings', page: 'dayStart' })],
   ['설정 › 오늘 화면', () => C.openSheet({ type: 'settings', page: 'todayView' })],
   ['설정 › 진도 화면', () => C.openSheet({ type: 'settings', page: 'progressView' })],
-  ['설정 › 달력과 시각', () => C.openSheet({ type: 'settings', page: 'calTime' })],
   ['설정 › 공부 시간', () => C.openSheet({ type: 'settings', page: 'time' })],
   ['설정 › 기록 관리', () => C.openSheet({ type: 'settings', page: 'data' })],
   ['설정 › 정보', () => C.openSheet({ type: 'settings', page: 'about' })],
@@ -141,9 +140,20 @@ const SCREENS = [
   ['돌아보기', () => C.openSheet({ type: 'week' })],
   ['달력', () => C.openSheet({ type: 'calendar' })],
   ['홈 화면에 추가', () => C.openSheet({ type: 'install' })],
+  // 처음 화면 (예시 기록을 잠깐 처음 설정 전으로 돌려서 본다 — 다음 화면에서 되돌림)
+  ...[0, 1, 2, 3, 4, 5].map((n) => [`처음 화면 ${n}`, () => {
+    C.D().onboarded = false;
+    C.setUI({ ob: n });
+    C.commit();
+  }]),
 ];
 
 async function show(fn) {
+  if (!C.D().onboarded) {
+    C.D().onboarded = true;
+    C.setUI({ ob: 0 });
+    C.commit();
+  }
   C.closeSheet();
   C.setUI({ stacks: { today: [], progress: [], grades: [] } });
   await tick();
@@ -178,9 +188,9 @@ async function fontReady(id) {
  */
 export async function run(o = {}) {
   const keep = { ...C.PR() };
-  const fonts = o.fonts || FONTS.map((f) => f.id);
+  const fonts = o.fonts || ['pretendard'];
   const sizes = o.sizes || ['sm', 'md', 'lg', 'xl'];
-  const themes = o.themes || ['paper', 'crisp', 'soft'];
+  const themes = o.themes || C.THEMES;
   const bars = o.bars || ['auto'];
   if (!C.isDemo()) C.loadDemo();
   C.setPrefs({ motion: 'off' });
@@ -210,6 +220,11 @@ export async function run(o = {}) {
           }
     }
   } finally {
+    if (!C.D().onboarded) {
+      C.D().onboarded = true;
+      C.setUI({ ob: 0 });
+      C.commit();
+    }
     C.closeSheet();
     C.setPrefs(keep);
     C.go('today');
